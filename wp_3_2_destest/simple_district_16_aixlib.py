@@ -2,7 +2,7 @@
 # @Author: MichaMans
 # @Date:   2018-09-20 11:05:56
 # @Last Modified by:   MichaMans
-# @Last Modified time: 2018-10-29 09:27:01
+# @Last Modified time: 2018-12-08 16:12:43
 
 """This module contains an example how to generate archetype buildings using
 TEASER API functions. THis script currently only works with TEASER branch
@@ -120,6 +120,29 @@ def results_to_csv(res_path):
 
 
 if __name__ == '__main__':
+
+    # test for new dataclasses for inas materials and typebuildings
+    # not working. can investigate further sadly OS seems to be useless
+
+    # from teaser.data.dataclass import DataClass
+
+    # belg_type_elements = DataClass()
+    # belg_type_elements.element_bind = None
+    # belg_type_elements.path_tb = os.path.join(
+    #     os.path.dirname(
+    #         os.path.abspath(__file__)),
+    #     "Specifications",
+    #     "Belgium_TypeBuildingElements.xml")
+
+    # belg_type_elements.path_mat = os.path.join(
+    #     os.path.dirname(
+    #         os.path.abspath(__file__)),
+    #     "Specifications",
+    #     "Belgium_MaterialTemplates.xml")
+
+    # belg_type_elements.load_mat_binding()
+    # belg_type_elements.load_tb_binding()
+
     prj = example_generate_simple_district_building()
 
     prj.used_library_calc = 'AixLib'
@@ -131,6 +154,184 @@ if __name__ == '__main__':
 
     # To make sure the parameters are calculated correctly we recommend to
     # run calc_all_buildings() function
+
+    from teaser.logic.buildingobjects.buildingphysics.layer import Layer
+    from teaser.logic.buildingobjects.buildingphysics.material import Material
+
+    layers_ow = [
+        ["HeavyMasonryForExteriorApplications",
+            0.1, 1850, 1.1, 0.84, 0.55, 0.9],
+        ["LargeCavityHorizontalHeatTransfer",
+            0.1, 100, 0.5555, 0.02, 0.55, 0.9],
+        ["ExpandedPolystrenemOrEPS",
+            0.01, 26, 0.036, 1.47, 0.8, 0.9],
+        ["MediumMasonryForExteriorApplications",
+            0.14, 1400, 0.75, 0.84, 0.55, 0.9],
+        ["GypsumPlasterForFinishing",
+            0.02, 975, 0.6, 0.84, 0.65, 0.9]]
+
+    layers_iw = [
+        ["GypsumPlasterForFinishing",
+            0.02, 975, 0.6, 0.84, 0.65, 0.9],
+        ["MediumMasonryForInteriorApplications",
+            0.14, 1400, 0.54, 0.84, 0.55, 0.9],
+        ["GypsumPlasterForFinishing",
+            0.02, 975, 0.6, 0.84, 0.65, 0.9]]
+
+    layers_dz_gf = [
+        ["DenseCastConcreteAlsoForFinishing",
+            0.15, 2100, 1.4, 0.84, 0.55, 0.9],
+        ["ExpandedPolystrenemOrEPS",
+            0.03, 26, 0.036, 1.47, 0.8, 0.9],
+        ["ScreedOrLightCastConcrete",
+            0.08, 1100, 0.6, 0.84, 0.55, 0.9],
+        ["CeramicTileForFinishing",
+            0.02, 2100, 1.4, 0.84, 0.55, 0.9]]
+
+    layers_dz_ceiling = [
+        ["DenseCastConcreteAlsoForFinishing",
+            0.1, 2100, 1.4, 0.84, 0.55, 0.9],
+        ["GypsumPlasterForFinishing",
+            0.02, 975, 0.6, 0.84, 0.65, 0.9]]
+
+    layers_dz_floor = [
+        ["TimberForFinishing",
+            0.02, 550, 0.11, 1.88, 0.44, 0.9],
+        ["ExpandedPolystrenemOrEPS",
+            0.08, 1100, 0.6, 0.84, 0.55, 0.9],
+        ["ScreedOrLightCastConcrete",
+            0.1, 2100, 1.4, 0.84, 0.55, 0.9]]
+
+    layers_nz_rt = [
+        ["CeramicTileForFinishing",
+            0.025, 2100, 1.4, 0.84, 0.55, 0.9],
+        ["LargeCavityVerticalHeatTransfer",
+            0.1, 100, 0.625, 0.02, 0.85, 0.9],
+        ["Glasswool",
+            0.04, 80, 0.04, 0.84, 0.85, 0.9],
+        ["GypsumPlasterForFinishing",
+            0.02, 975, 0.6, 0.84, 0.65, 0.9]]
+
+    for zone in prj.buildings[0].thermal_zones:
+        # outer walls and windows equal for every zone
+        for wall in zone.outer_walls:
+            wall.area = 22.4
+            wall.layer = None
+            for lay in layers_ow:
+                temp_layer = Layer(parent=wall)
+                temp_layer.thickness = lay[1]
+                temp_layer_material = Material(parent=temp_layer)
+                temp_layer_material.name = lay[0]
+                temp_layer_material.density = lay[2]
+                temp_layer_material.thermal_conduc = lay[3]
+                temp_layer_material.heat_capac = lay[4]
+                temp_layer_material.solar_absorp = lay[5]
+                temp_layer_material.ir_emissivity = lay[6]
+
+        # for an implementation, window area is missing
+
+        # for win in zone.windows:
+        #     win.area = 22.4
+        #     win.layer = None
+        #     for lay in layers_ow:
+        #         temp_layer = Layer(parent=win)
+        #         temp_layer.thickness = lay[1]
+        #         temp_layer_material = Material(parent=temp_layer)
+        #         temp_layer_material.name = lay[0]
+        #         temp_layer_material.density = lay[2]
+        #         temp_layer_material.thermal_conduc = lay[3]
+        #         temp_layer_material.heat_capac = lay[4]
+        #         temp_layer_material.solar_absorp = lay[5]
+        #         temp_layer_material.ir_emissivity = lay[6]
+
+        if zone.name == "SingleDwelling":
+            zone.rooftops = None
+            for gf in zone.ground_floors:
+                gf.area = 64
+                gf.layer = None
+                for lay in layers_dz_gf:
+                    temp_layer = Layer(parent=gf)
+                    temp_layer.thickness = lay[1]
+                    temp_layer_material = Material(parent=temp_layer)
+                    temp_layer_material.name = lay[0]
+                    temp_layer_material.density = lay[2]
+                    temp_layer_material.thermal_conduc = lay[3]
+                    temp_layer_material.heat_capac = lay[4]
+                    temp_layer_material.solar_absorp = lay[5]
+                    temp_layer_material.ir_emissivity = lay[6]
+            for ceiling in zone.ceilings:
+                ceiling.area = 64
+                ceiling.layer = None
+                for lay in layers_dz_ceiling:
+                    temp_layer = Layer(parent=ceiling)
+                    temp_layer.thickness = lay[1]
+                    temp_layer_material = Material(parent=temp_layer)
+                    temp_layer_material.name = lay[0]
+                    temp_layer_material.density = lay[2]
+                    temp_layer_material.thermal_conduc = lay[3]
+                    temp_layer_material.heat_capac = lay[4]
+                    temp_layer_material.solar_absorp = lay[5]
+                    temp_layer_material.ir_emissivity = lay[6]
+            for floor in zone.floors:
+                floor.area = 64
+                floor.layer = None
+                for lay in layers_dz_floor:
+                    temp_layer = Layer(parent=floor)
+                    temp_layer.thickness = lay[1]
+                    temp_layer_material = Material(parent=temp_layer)
+                    temp_layer_material.name = lay[0]
+                    temp_layer_material.density = lay[2]
+                    temp_layer_material.thermal_conduc = lay[3]
+                    temp_layer_material.heat_capac = lay[4]
+                    temp_layer_material.solar_absorp = lay[5]
+                    temp_layer_material.ir_emissivity = lay[6]
+            for iw in zone.inner_walls:
+                iw.area = 187
+                iw.layer = None
+                for lay in layers_iw:
+                    temp_layer = Layer(parent=iw)
+                    temp_layer.thickness = lay[1]
+                    temp_layer_material = Material(parent=temp_layer)
+                    temp_layer_material.name = lay[0]
+                    temp_layer_material.density = lay[2]
+                    temp_layer_material.thermal_conduc = lay[3]
+                    temp_layer_material.heat_capac = lay[4]
+                    temp_layer_material.solar_absorp = lay[5]
+                    temp_layer_material.ir_emissivity = lay[6]
+
+        if zone.name == "BedRoom":
+            zone.rooftops.pop(0)
+            zone.ceiling = None
+            zone.floors = None
+            zone.ground_floors = None
+            for rt in zone.rooftops:
+                rt.area = 64
+                rt.layer = None
+                rt.tilt = 0
+                rt.orientation = -1
+                for lay in layers_nz_rt:
+                    temp_layer = Layer(parent=rt)
+                    temp_layer.thickness = lay[1]
+                    temp_layer_material = Material(parent=temp_layer)
+                    temp_layer_material.name = lay[0]
+                    temp_layer_material.density = lay[2]
+                    temp_layer_material.thermal_conduc = lay[3]
+                    temp_layer_material.heat_capac = lay[4]
+                    temp_layer_material.solar_absorp = lay[5]
+                    temp_layer_material.ir_emissivity = lay[6]
+            for iw in zone.inner_walls:
+                iw.area = 168
+                iw.layer = None
+                for lay in layers_iw:
+                    temp_layer = Layer(parent=iw)
+                    temp_layer.thickness = lay[1]
+                    temp_layer_material = Material(parent=temp_layer)
+                    temp_layer_material.name = lay[0]
+                    temp_layer_material.density = lay[2]
+                    temp_layer_material.thermal_conduc = lay[3]
+                    temp_layer_material.heat_capac = lay[4]
+                    temp_layer_material.solar_absorp = lay[5]
+                    temp_layer_material.ir_emissivity = lay[6]
 
     prj.calc_all_buildings()
 
@@ -154,11 +355,11 @@ if __name__ == '__main__':
 #         between 5 pm and 11 pm and the third value during night.
 
     profile_living = [291.15, 291.15, 291.15, 291.15, 291.15, 291.15, 291.15,
-                      289.15, 289.15, 289.15, 289.15, 289.15, 289.15, 289.15,
+                      291.15, 289.15, 289.15, 289.15, 289.15, 289.15, 289.15,
                       289.15, 289.15, 289.15, 294.15, 294.15, 294.15, 294.15,
                       294.15, 294.15, 294.15, 291.15]
     profile_bed_room = [293.15, 293.15, 293.15, 293.15, 293.15, 293.15,
-                        293.15, 289.15, 289.15, 289.15, 289.15, 289.15,
+                        293.15, 293.15, 289.15, 289.15, 289.15, 289.15,
                         289.15, 289.15, 289.15, 289.15, 289.15, 291.15,
                         291.15, 291.15, 291.15, 291.15, 291.15, 291.15, 293.15]
 
@@ -182,10 +383,19 @@ if __name__ == '__main__':
     prj.buildings[0].thermal_zones[0].use_conditions.machines = 0
     prj.buildings[0].thermal_zones[0].use_conditions.lighting_power = 0
     prj.buildings[0].thermal_zones[0].infiltration_rate = 0.4
+
+    prj.buildings[0].thermal_zones[0].use_conditions.use_constant_ach_rate =\
+        True
+    prj.buildings[0].thermal_zones[0].use_conditions.base_ach = 0.4
+
     prj.buildings[0].thermal_zones[1].use_conditions.persons = 3.84
     prj.buildings[0].thermal_zones[1].use_conditions.machines = 0
     prj.buildings[0].thermal_zones[1].use_conditions.lighting_power = 0
     prj.buildings[0].thermal_zones[1].infiltration_rate = 0.4
+
+    prj.buildings[0].thermal_zones[1].use_conditions.use_constant_ach_rate =\
+        True
+    prj.buildings[0].thermal_zones[1].use_conditions.base_ach = 0.4
 
     # profiles for day and night zone representing the share of total number
     # of persons
@@ -200,6 +410,12 @@ if __name__ == '__main__':
         0.21, 0.21, 0.21, 0.21, 0.21, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3]
     prj.buildings[0].thermal_zones[1].use_conditions.activity_type_persons = 2
 
+    prj.buildings[0].thermal_zones[0].model_attr.heat_load = 25000
+    prj.buildings[0].thermal_zones[1].model_attr.heat_load = 25000
+
+    prj.modelica_info.current_solver = "dassl"
+    prj.modelica_info.interval_output = 900
+
     prj.export_aixlib(
         internal_id=None,
         path=None)
@@ -209,4 +425,3 @@ if __name__ == '__main__':
     res_path = "D:\\dymola\\SimpleDistrictBuilding.mat"
 
     # results_to_csv(res_path)
-
