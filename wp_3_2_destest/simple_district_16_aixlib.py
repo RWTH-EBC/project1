@@ -2,7 +2,7 @@
 # @Author: MichaMans
 # @Date:   2018-09-20 11:05:56
 # @Last Modified by:   MichaMans
-# @Last Modified time: 2018-12-08 16:12:43
+# @Last Modified time: 2018-12-21 14:11:48
 
 """This module contains an example how to generate archetype buildings using
 TEASER API functions. THis script currently only works with TEASER branch
@@ -91,11 +91,11 @@ def results_to_csv(res_path):
     results.index = results['Time']
 
     results["AixLib_Heating_Power_W"] = results["multizone.PHeater[1]"] +\
-        results["multizone.PHeater[1]"]
+        results["multizone.PHeater[2]"]
 
     # drop Time and single zones columns
     results = results.drop(
-        ['Time', 'multizone.PHeater[1]', 'multizone.PHeater[2]'],
+        ['Time'],
         axis=1)
 
     results = results.rename(
@@ -354,14 +354,17 @@ if __name__ == '__main__':
 #         With the first value daily between 7am and 5 pm, the second value
 #         between 5 pm and 11 pm and the third value during night.
 
-    profile_living = [291.15, 291.15, 291.15, 291.15, 291.15, 291.15, 291.15,
-                      291.15, 289.15, 289.15, 289.15, 289.15, 289.15, 289.15,
-                      289.15, 289.15, 289.15, 294.15, 294.15, 294.15, 294.15,
-                      294.15, 294.15, 294.15, 291.15]
-    profile_bed_room = [293.15, 293.15, 293.15, 293.15, 293.15, 293.15,
-                        293.15, 293.15, 289.15, 289.15, 289.15, 289.15,
-                        289.15, 289.15, 289.15, 289.15, 289.15, 291.15,
-                        291.15, 291.15, 291.15, 291.15, 291.15, 291.15, 293.15]
+    profile_living = [
+        291.15, 291.15, 291.15, 291.15, 291.15, 291.15,
+        291.15, 289.15, 289.15, 289.15, 289.15, 289.15,
+        289.15, 289.15, 289.15, 289.15, 289.15, 294.15,
+        294.15, 294.15, 294.15, 294.15, 291.15, 291.15, 291.15]
+
+    profile_bed_room = [
+        293.15, 293.15, 293.15, 293.15, 293.15, 293.15,
+        293.15, 289.15, 289.15, 289.15, 289.15, 289.15,
+        289.15, 289.15, 289.15, 289.15, 289.15, 291.15,
+        291.15, 291.15, 291.15, 291.15, 293.15, 293.15, 293.15]
 
     prj.buildings[0].thermal_zones[0].use_conditions.profile_heating_temp =\
         profile_living
@@ -410,8 +413,8 @@ if __name__ == '__main__':
         0.21, 0.21, 0.21, 0.21, 0.21, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3]
     prj.buildings[0].thermal_zones[1].use_conditions.activity_type_persons = 2
 
-    prj.buildings[0].thermal_zones[0].model_attr.heat_load = 25000
-    prj.buildings[0].thermal_zones[1].model_attr.heat_load = 25000
+    prj.buildings[0].thermal_zones[0].model_attr.heat_load = 8024.46
+    prj.buildings[0].thermal_zones[1].model_attr.heat_load = 8548.50
 
     prj.modelica_info.current_solver = "dassl"
     prj.modelica_info.interval_output = 900
@@ -424,4 +427,4 @@ if __name__ == '__main__':
 
     res_path = "D:\\dymola\\SimpleDistrictBuilding.mat"
 
-    # results_to_csv(res_path)
+    results_to_csv(res_path)
