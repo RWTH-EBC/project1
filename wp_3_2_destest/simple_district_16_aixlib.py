@@ -2,7 +2,7 @@
 # @Author: MichaMans
 # @Date:   2018-09-20 11:05:56
 # @Last Modified by:   MichaMans
-# @Last Modified time: 2018-12-21 14:11:48
+# @Last Modified time: 2019-03-21 18:38:09
 
 """This module contains an example how to generate archetype buildings using
 TEASER API functions. THis script currently only works with TEASER branch
@@ -109,12 +109,21 @@ def results_to_csv(res_path):
     # results.to_csv(path=res_path, delimiter=';')
     dymola.close()
 
+    time = pd.to_numeric(results.index)
+    time -= 31536000
+    results.index = time
+    results = results.ix[0:31536000]
+
     res_csv = os.path.join(
         os.path.dirname(
             os.path.abspath(__file__)),
         "AixLib_SingleBuilding.csv")
 
     results.to_csv(res_csv)
+
+    print(results)
+    print(res_csv)
+
 
     return results
 
@@ -416,8 +425,10 @@ if __name__ == '__main__':
     prj.buildings[0].thermal_zones[0].model_attr.heat_load = 8024.46
     prj.buildings[0].thermal_zones[1].model_attr.heat_load = 8548.50
 
-    prj.modelica_info.current_solver = "dassl"
+    prj.modelica_info.current_solver = "cvode"
     prj.modelica_info.interval_output = 900
+    prj.modelica_info.start_time = 30326400
+    prj.modelica_info.stop_time = 63072000
 
     prj.export_aixlib(
         internal_id=None,
