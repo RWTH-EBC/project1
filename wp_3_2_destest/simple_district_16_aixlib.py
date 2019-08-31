@@ -417,7 +417,7 @@ if __name__ == '__main__':
         0.4, 0.4, 0.4, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
     prj.buildings[0].thermal_zones[0].use_conditions.activity_type_persons = 2
 
-    prj.buildings[0].thermal_zones[0].use_conditions.profile_persons = [
+    prj.buildings[0].thermal_zones[1].use_conditions.profile_persons = [
         1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.21, 0.21, 0.21, 0.21, 0.21,
         0.21, 0.21, 0.21, 0.21, 0.21, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3]
     prj.buildings[0].thermal_zones[1].use_conditions.activity_type_persons = 2
