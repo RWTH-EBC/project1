@@ -1,0 +1,1273 @@
+{
+    "project": {
+        "version": "0.7",
+        "name": "DESTESTOffice",
+        "weather_file_path": "D:\\GIT\\project1\\wp_3_2_destest\\Buildings\\OfficeBuilding\\Climate\\BEL_Brussels.064510_IWEC.mos",
+        "number_of_elements_calc": 2,
+        "merge_windows_calc": false,
+        "used_library_calc": "AixLib",
+        "modelica_info": {
+            "start_time": 0,
+            "stop_time": 31536000,
+            "interval_output": "3600",
+            "current_solver": "dassl",
+            "equidistant_output": true,
+            "results_at_events": false,
+            "version": "3.2.3"
+        },
+        "buildings": {
+            "Building_1": {
+                "classification": {
+                    "class": "Building",
+                    "method": "undefined"
+                },
+                "street_name": "",
+                "city": "",
+                "year_of_construction": 2010,
+                "year_of_retrofit": null,
+                "number_of_floors": 1,
+                "height_of_floors": 3.0,
+                "net_leased_area": 3023.0,
+                "outer_area": {
+                    "0": 21.6,
+                    "90": 6.3,
+                    "270": 6.3,
+                    "-1": 1511.0,
+                    "-2": 1511.0,
+                    "180": 28.35,
+                    "225": 0.0001
+                },
+                "window_area": {
+                    "0": 194.4,
+                    "90": 56.7,
+                    "270": 56.7,
+                    "180": 194.4,
+                    "225": 0.0001
+                },
+                "thermal_zones": {
+                    "Office_North_floor_0": {
+                        "area": 550.0,
+                        "volume": 1650.0,
+                        "use_conditions": {
+                            "usage": "Group Office (between 2 and 6 employees)",
+                            "typical_length": 6.0,
+                            "typical_width": 6.0,
+                            "with_heating": true,
+                            "with_ideal_thresholds": false,
+                            "T_threshold_heating": 288.15,
+                            "T_threshold_cooling": 295.15,
+                            "with_cooling": false,
+                            "fixed_heat_flow_rate_persons": 70,
+                            "activity_degree_persons": 1.2,
+                            "persons": 0.07142857142857142,
+                            "internal_gains_moisture_no_people": 0.5,
+                            "ratio_conv_rad_persons": 0.5,
+                            "machines": 7.0,
+                            "ratio_conv_rad_machines": 0.75,
+                            "lighting_power": 12.5,
+                            "ratio_conv_rad_lighting": 0.9,
+                            "use_constant_infiltration": false,
+                            "infiltration_rate": 0.2,
+                            "max_user_infiltration": 1.0,
+                            "max_overheating_infiltration": [
+                                3.0,
+                                2.0
+                            ],
+                            "max_summer_infiltration": [
+                                1.0,
+                                283.15,
+                                290.15
+                            ],
+                            "winter_reduction_infiltration": [
+                                0.2,
+                                273.15,
+                                283.15
+                            ],
+                            "min_ahu": 0.0,
+                            "max_ahu": 2.6,
+                            "with_ahu": false,
+                            "heating_profile": [
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15
+                            ],
+                            "cooling_profile": [
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15
+                            ],
+                            "persons_profile": [
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.2,
+                                0.4,
+                                0.6,
+                                0.8,
+                                0.8,
+                                0.4,
+                                0.6,
+                                0.8,
+                                0.8,
+                                0.4,
+                                0.2,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0
+                            ],
+                            "machines_profile": [
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.2,
+                                0.4,
+                                0.6,
+                                0.8,
+                                0.8,
+                                0.4,
+                                0.6,
+                                0.8,
+                                0.8,
+                                0.4,
+                                0.2,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1
+                            ],
+                            "lighting_profile": [
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0
+                            ]
+                        },
+                        "outer_walls": {
+                            "outer_wall_0": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": null,
+                                "area": 21.6,
+                                "tilt": 90.0,
+                                "orientation": 0,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 2.7,
+                                "outer_radiation": 5.0,
+                                "outer_convection": 20.0,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.01,
+                                        "material": {
+                                            "name": "lime_cement_plaster",
+                                            "density": 1900.0,
+                                            "thermal_conduc": 0.8,
+                                            "heat_capac": 0.85,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            },
+                            "outer_wall_90": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": null,
+                                "area": 3.15,
+                                "tilt": 90.0,
+                                "orientation": 90,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 2.7,
+                                "outer_radiation": 5.0,
+                                "outer_convection": 20.0,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.01,
+                                        "material": {
+                                            "name": "lime_cement_plaster",
+                                            "density": 1900.0,
+                                            "thermal_conduc": 0.8,
+                                            "heat_capac": 0.85,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            },
+                            "outer_wall_270": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": null,
+                                "area": 3.15,
+                                "tilt": 90.0,
+                                "orientation": 270,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 2.7,
+                                "outer_radiation": 5.0,
+                                "outer_convection": 20.0,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.01,
+                                        "material": {
+                                            "name": "lime_cement_plaster",
+                                            "density": 1900.0,
+                                            "thermal_conduc": 0.8,
+                                            "heat_capac": 0.85,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "doors": {},
+                        "rooftops": {
+                            "rooftop1": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": null,
+                                "area": 550.0,
+                                "tilt": 0.0,
+                                "orientation": -1,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 1.7,
+                                "outer_radiation": 5.0,
+                                "outer_convection": 20.0,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.2,
+                                        "material": {
+                                            "name": "Multipor_insulation",
+                                            "density": 115.2,
+                                            "thermal_conduc": 0.045,
+                                            "heat_capac": 1.2923522,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "ground_floors": {
+                            "groundfloor_2": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": null,
+                                "area": 550.0,
+                                "tilt": 0.0,
+                                "orientation": -2,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 1.7,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.1,
+                                        "material": {
+                                            "name": "EPS_perimeter_insulation_top_layer",
+                                            "density": 39.5,
+                                            "thermal_conduc": 0.035,
+                                            "heat_capac": 1.45,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "windows": {
+                            "outer_wall_0": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": "EnEv",
+                                "area": 194.4,
+                                "tilt": 90.0,
+                                "orientation": 0,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 2.7,
+                                "outer_radiation": 5.0,
+                                "outer_convection": 20.0,
+                                "g_value": 0.4,
+                                "a_conv": 0.03,
+                                "shading_g_total": 1.0,
+                                "shading_max_irr": 100.0,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.024,
+                                        "material": {
+                                            "name": "Glas1995_2015EnEV",
+                                            "density": 0.0,
+                                            "thermal_conduc": 0.04,
+                                            "heat_capac": 0.0,
+                                            "solar_absorp": 0.7,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            },
+                            "outer_wall_90": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": "EnEv",
+                                "area": 28.35,
+                                "tilt": 90.0,
+                                "orientation": 90,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 2.7,
+                                "outer_radiation": 5.0,
+                                "outer_convection": 20.0,
+                                "g_value": 0.4,
+                                "a_conv": 0.03,
+                                "shading_g_total": 1.0,
+                                "shading_max_irr": 100.0,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.024,
+                                        "material": {
+                                            "name": "Glas1995_2015EnEV",
+                                            "density": 0.0,
+                                            "thermal_conduc": 0.04,
+                                            "heat_capac": 0.0,
+                                            "solar_absorp": 0.7,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            },
+                            "outer_wall_270": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": "EnEv",
+                                "area": 28.35,
+                                "tilt": 90.0,
+                                "orientation": 270,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 2.7,
+                                "outer_radiation": 5.0,
+                                "outer_convection": 20.0,
+                                "g_value": 0.4,
+                                "a_conv": 0.03,
+                                "shading_g_total": 1.0,
+                                "shading_max_irr": 100.0,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.024,
+                                        "material": {
+                                            "name": "Glas1995_2015EnEV",
+                                            "density": 0.0,
+                                            "thermal_conduc": 0.04,
+                                            "heat_capac": 0.0,
+                                            "solar_absorp": 0.7,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "inner_walls": {
+                            "inner_wall": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": "light",
+                                "area": 810.0,
+                                "tilt": 90.0,
+                                "orientation": null,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 2.7,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.0125,
+                                        "material": {
+                                            "name": "plasterboard",
+                                            "density": 732.0223,
+                                            "thermal_conduc": 0.2113,
+                                            "heat_capac": 1.3838755,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    },
+                                    "1": {
+                                        "thickness": 0.07,
+                                        "material": {
+                                            "name": "mineral_wool_040",
+                                            "density": 60.0,
+                                            "thermal_conduc": 0.04,
+                                            "heat_capac": 0.85,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    },
+                                    "2": {
+                                        "thickness": 0.0125,
+                                        "material": {
+                                            "name": "plasterboard",
+                                            "density": 732.0223,
+                                            "thermal_conduc": 0.2113,
+                                            "heat_capac": 1.3838755,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "floors": {},
+                        "ceilings": {}
+                    },
+                    "Office_South_floor_0": {
+                        "area": 550.0,
+                        "volume": 1650.0,
+                        "use_conditions": {
+                            "usage": "Group Office (between 2 and 6 employees)",
+                            "typical_length": 6.0,
+                            "typical_width": 6.0,
+                            "with_heating": true,
+                            "with_ideal_thresholds": false,
+                            "T_threshold_heating": 288.15,
+                            "T_threshold_cooling": 295.15,
+                            "with_cooling": false,
+                            "fixed_heat_flow_rate_persons": 70,
+                            "activity_degree_persons": 1.2,
+                            "persons": 0.07142857142857142,
+                            "internal_gains_moisture_no_people": 0.5,
+                            "ratio_conv_rad_persons": 0.5,
+                            "machines": 7.0,
+                            "ratio_conv_rad_machines": 0.75,
+                            "lighting_power": 12.5,
+                            "ratio_conv_rad_lighting": 0.9,
+                            "use_constant_infiltration": false,
+                            "infiltration_rate": 0.2,
+                            "max_user_infiltration": 1.0,
+                            "max_overheating_infiltration": [
+                                3.0,
+                                2.0
+                            ],
+                            "max_summer_infiltration": [
+                                1.0,
+                                283.15,
+                                290.15
+                            ],
+                            "winter_reduction_infiltration": [
+                                0.2,
+                                273.15,
+                                283.15
+                            ],
+                            "min_ahu": 0.0,
+                            "max_ahu": 2.6,
+                            "with_ahu": false,
+                            "heating_profile": [
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15
+                            ],
+                            "cooling_profile": [
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15
+                            ],
+                            "persons_profile": [
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.2,
+                                0.4,
+                                0.6,
+                                0.8,
+                                0.8,
+                                0.4,
+                                0.6,
+                                0.8,
+                                0.8,
+                                0.4,
+                                0.2,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0
+                            ],
+                            "machines_profile": [
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.2,
+                                0.4,
+                                0.6,
+                                0.8,
+                                0.8,
+                                0.4,
+                                0.6,
+                                0.8,
+                                0.8,
+                                0.4,
+                                0.2,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1
+                            ],
+                            "lighting_profile": [
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0
+                            ]
+                        },
+                        "outer_walls": {
+                            "outer_wall_90": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": null,
+                                "area": 3.15,
+                                "tilt": 90.0,
+                                "orientation": 90,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 2.7,
+                                "outer_radiation": 5.0,
+                                "outer_convection": 20.0,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.01,
+                                        "material": {
+                                            "name": "lime_cement_plaster",
+                                            "density": 1900.0,
+                                            "thermal_conduc": 0.8,
+                                            "heat_capac": 0.85,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            },
+                            "outer_wall_180": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": null,
+                                "area": 28.35,
+                                "tilt": 90.0,
+                                "orientation": 180,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 2.7,
+                                "outer_radiation": 5.0,
+                                "outer_convection": 20.0,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.01,
+                                        "material": {
+                                            "name": "lime_cement_plaster",
+                                            "density": 1900.0,
+                                            "thermal_conduc": 0.8,
+                                            "heat_capac": 0.85,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            },
+                            "outer_wall_270": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": null,
+                                "area": 3.15,
+                                "tilt": 90.0,
+                                "orientation": 270,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 2.7,
+                                "outer_radiation": 5.0,
+                                "outer_convection": 20.0,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.01,
+                                        "material": {
+                                            "name": "lime_cement_plaster",
+                                            "density": 1900.0,
+                                            "thermal_conduc": 0.8,
+                                            "heat_capac": 0.85,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "doors": {},
+                        "rooftops": {
+                            "rooftop1": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": null,
+                                "area": 550.0,
+                                "tilt": 0.0,
+                                "orientation": -1,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 1.7,
+                                "outer_radiation": 5.0,
+                                "outer_convection": 20.0,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.2,
+                                        "material": {
+                                            "name": "Multipor_insulation",
+                                            "density": 115.2,
+                                            "thermal_conduc": 0.045,
+                                            "heat_capac": 1.2923522,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "ground_floors": {
+                            "groundfloor_2": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": null,
+                                "area": 550.0,
+                                "tilt": 0.0,
+                                "orientation": -2,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 1.7,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.1,
+                                        "material": {
+                                            "name": "EPS_perimeter_insulation_top_layer",
+                                            "density": 39.5,
+                                            "thermal_conduc": 0.035,
+                                            "heat_capac": 1.45,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "windows": {
+                            "outer_wall_90": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": "EnEv",
+                                "area": 28.35,
+                                "tilt": 90.0,
+                                "orientation": 90,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 2.7,
+                                "outer_radiation": 5.0,
+                                "outer_convection": 20.0,
+                                "g_value": 0.4,
+                                "a_conv": 0.03,
+                                "shading_g_total": 1.0,
+                                "shading_max_irr": 100.0,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.024,
+                                        "material": {
+                                            "name": "Glas1995_2015EnEV",
+                                            "density": 0.0,
+                                            "thermal_conduc": 0.04,
+                                            "heat_capac": 0.0,
+                                            "solar_absorp": 0.7,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            },
+                            "outer_wall_180": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": "EnEv",
+                                "area": 194.4,
+                                "tilt": 90.0,
+                                "orientation": 180,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 2.7,
+                                "outer_radiation": 5.0,
+                                "outer_convection": 20.0,
+                                "g_value": 0.4,
+                                "a_conv": 0.03,
+                                "shading_g_total": 1.0,
+                                "shading_max_irr": 100.0,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.024,
+                                        "material": {
+                                            "name": "Glas1995_2015EnEV",
+                                            "density": 0.0,
+                                            "thermal_conduc": 0.04,
+                                            "heat_capac": 0.0,
+                                            "solar_absorp": 0.7,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            },
+                            "outer_wall_270": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": "EnEv",
+                                "area": 28.35,
+                                "tilt": 90.0,
+                                "orientation": 270,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 2.7,
+                                "outer_radiation": 5.0,
+                                "outer_convection": 20.0,
+                                "g_value": 0.4,
+                                "a_conv": 0.03,
+                                "shading_g_total": 1.0,
+                                "shading_max_irr": 100.0,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.024,
+                                        "material": {
+                                            "name": "Glas1995_2015EnEV",
+                                            "density": 0.0,
+                                            "thermal_conduc": 0.04,
+                                            "heat_capac": 0.0,
+                                            "solar_absorp": 0.7,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "inner_walls": {
+                            "inner_wall": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": "light",
+                                "area": 810.0,
+                                "tilt": 90.0,
+                                "orientation": null,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 2.7,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.0125,
+                                        "material": {
+                                            "name": "plasterboard",
+                                            "density": 732.0223,
+                                            "thermal_conduc": 0.2113,
+                                            "heat_capac": 1.3838755,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    },
+                                    "1": {
+                                        "thickness": 0.07,
+                                        "material": {
+                                            "name": "mineral_wool_040",
+                                            "density": 60.0,
+                                            "thermal_conduc": 0.04,
+                                            "heat_capac": 0.85,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    },
+                                    "2": {
+                                        "thickness": 0.0125,
+                                        "material": {
+                                            "name": "plasterboard",
+                                            "density": 732.0223,
+                                            "thermal_conduc": 0.2113,
+                                            "heat_capac": 1.3838755,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "floors": {},
+                        "ceilings": {}
+                    },
+                    "Trafficarea_floor_0": {
+                        "area": 411.0,
+                        "volume": 1233.0,
+                        "use_conditions": {
+                            "usage": "Traffic area",
+                            "typical_length": 2.0,
+                            "typical_width": 12.0,
+                            "with_heating": true,
+                            "with_ideal_thresholds": false,
+                            "T_threshold_heating": 288.15,
+                            "T_threshold_cooling": 295.15,
+                            "with_cooling": false,
+                            "fixed_heat_flow_rate_persons": 70,
+                            "activity_degree_persons": 1.2,
+                            "persons": 0.0,
+                            "internal_gains_moisture_no_people": 0.0,
+                            "ratio_conv_rad_persons": 0.5,
+                            "machines": 0.0,
+                            "ratio_conv_rad_machines": 0.75,
+                            "lighting_power": 7.0,
+                            "ratio_conv_rad_lighting": 0.9,
+                            "use_constant_infiltration": false,
+                            "infiltration_rate": 0.2,
+                            "max_user_infiltration": 1.0,
+                            "max_overheating_infiltration": [
+                                3.0,
+                                2.0
+                            ],
+                            "max_summer_infiltration": [
+                                1.0,
+                                283.15,
+                                290.15
+                            ],
+                            "winter_reduction_infiltration": [
+                                0.2,
+                                273.15,
+                                283.15
+                            ],
+                            "min_ahu": 0.0,
+                            "max_ahu": 2.0,
+                            "with_ahu": false,
+                            "heating_profile": [
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15
+                            ],
+                            "cooling_profile": [
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15,
+                                294.15
+                            ],
+                            "persons_profile": [
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.2,
+                                0.4,
+                                0.6,
+                                0.8,
+                                0.8,
+                                0.4,
+                                0.6,
+                                0.8,
+                                0.8,
+                                0.4,
+                                0.2,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0
+                            ],
+                            "machines_profile": [
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.2,
+                                0.4,
+                                0.6,
+                                0.8,
+                                0.8,
+                                0.4,
+                                0.6,
+                                0.8,
+                                0.8,
+                                0.4,
+                                0.2,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1,
+                                0.1
+                            ],
+                            "lighting_profile": [
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0
+                            ]
+                        },
+                        "outer_walls": {
+                            "outer_wall_225": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": null,
+                                "area": 0.0001,
+                                "tilt": 90.0,
+                                "orientation": 225,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 2.7,
+                                "outer_radiation": 5.0,
+                                "outer_convection": 20.0,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.01,
+                                        "material": {
+                                            "name": "lime_cement_plaster",
+                                            "density": 1900.0,
+                                            "thermal_conduc": 0.8,
+                                            "heat_capac": 0.85,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "doors": {},
+                        "rooftops": {
+                            "rooftop1": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": null,
+                                "area": 411.0,
+                                "tilt": 0.0,
+                                "orientation": -1,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 1.7,
+                                "outer_radiation": 5.0,
+                                "outer_convection": 20.0,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.2,
+                                        "material": {
+                                            "name": "Multipor_insulation",
+                                            "density": 115.2,
+                                            "thermal_conduc": 0.045,
+                                            "heat_capac": 1.2923522,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "ground_floors": {
+                            "groundfloor_2": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": null,
+                                "area": 411.0,
+                                "tilt": 0.0,
+                                "orientation": -2,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 1.7,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.1,
+                                        "material": {
+                                            "name": "EPS_perimeter_insulation_top_layer",
+                                            "density": 39.5,
+                                            "thermal_conduc": 0.035,
+                                            "heat_capac": 1.45,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "windows": {
+                            "outer_wall_225": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": "EnEv",
+                                "area": 0.0001,
+                                "tilt": 90.0,
+                                "orientation": 225,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 2.7,
+                                "outer_radiation": 5.0,
+                                "outer_convection": 20.0,
+                                "g_value": 0.4,
+                                "a_conv": 0.03,
+                                "shading_g_total": 1.0,
+                                "shading_max_irr": 100.0,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.024,
+                                        "material": {
+                                            "name": "Glas1995_2015EnEV",
+                                            "density": 0.0,
+                                            "thermal_conduc": 0.04,
+                                            "heat_capac": 0.0,
+                                            "solar_absorp": 0.7,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "inner_walls": {
+                            "inner_wall": {
+                                "year_of_construction": null,
+                                "year_of_retrofit": null,
+                                "construction_type": "light",
+                                "area": 605.0,
+                                "tilt": 90.0,
+                                "orientation": null,
+                                "inner_radiation": 5.0,
+                                "inner_convection": 2.7,
+                                "layer": {
+                                    "0": {
+                                        "thickness": 0.0125,
+                                        "material": {
+                                            "name": "plasterboard",
+                                            "density": 732.0223,
+                                            "thermal_conduc": 0.2113,
+                                            "heat_capac": 1.3838755,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    },
+                                    "1": {
+                                        "thickness": 0.07,
+                                        "material": {
+                                            "name": "mineral_wool_040",
+                                            "density": 60.0,
+                                            "thermal_conduc": 0.04,
+                                            "heat_capac": 0.85,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    },
+                                    "2": {
+                                        "thickness": 0.0125,
+                                        "material": {
+                                            "name": "plasterboard",
+                                            "density": 732.0223,
+                                            "thermal_conduc": 0.2113,
+                                            "heat_capac": 1.3838755,
+                                            "solar_absorp": 0.5,
+                                            "ir_emissivity": 0.9
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "floors": {},
+                        "ceilings": {}
+                    }
+                }
+            }
+        }
+    }
+}
