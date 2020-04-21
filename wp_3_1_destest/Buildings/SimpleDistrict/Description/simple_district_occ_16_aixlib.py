@@ -46,7 +46,7 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         bldg = prj.add_residential(
             method="tabula_de",
             usage="single_family_house",
-            name="SimpleDistrictBuilding_{}".format(bldg_number),
+            name="SimpleDistrictBuilding_occ_{}".format(bldg_number),
             year_of_construction=1980,
             number_of_floors=2,
             height_of_floors=3.5,
@@ -242,164 +242,117 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
     #         With the first value daily between 7am and 5 pm, the second value
     #         between 5 pm and 11 pm and the third value during night.
 
-    profile_living = [
-        291.15,
-        291.15,
-        291.15,
-        291.15,
-        291.15,
-        291.15,
-        291.15,
-        289.15,
-        289.15,
-        289.15,
-        289.15,
-        289.15,
-        289.15,
-        289.15,
-        289.15,
-        289.15,
-        289.15,
-        294.15,
-        294.15,
-        294.15,
-        294.15,
-        294.15,
-        291.15,
-        291.15,
-        291.15,
-    ]
+    occ_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "Occupants",
+        "Profiles",
+    )
 
-    profile_bed_room = [
-        293.15,
-        293.15,
-        293.15,
-        293.15,
-        293.15,
-        293.15,
-        293.15,
-        289.15,
-        289.15,
-        289.15,
-        289.15,
-        289.15,
-        289.15,
-        289.15,
-        289.15,
-        289.15,
-        289.15,
-        291.15,
-        291.15,
-        291.15,
-        291.15,
-        291.15,
-        293.15,
-        293.15,
-        293.15,
-    ]
+    for i, bldg in enumerate(prj.buildings):
+        # Load set temperature add 273.15 to be in K
+        if i < 9:
+            i = "0{}".format(i + 1)
+        else:
+            i = str(i + 1)
+        set_temp_living = pd.read_csv(
+            filepath_or_buffer=os.path.join(occ_path, "0{}_sh_day.txt".format(i)),
+            index_col=0,
+            skiprows=2,
+            sep=" ",
+            names=["values"],
+        )
+        set_temp_living.loc[:, "values"] = set_temp_living["values"] + 273.15
+        set_temp_bed_room = pd.read_csv(
+            filepath_or_buffer=os.path.join(occ_path, "0{}_sh_night.txt".format(i)),
+            index_col=0,
+            skiprows=2,
+            sep=" ",
+            names=["values"],
+        )
+        set_temp_bed_room.loc[:, "values"] = set_temp_bed_room["values"] + 273.15
+        # Load convective and radiative internal loads.
+        # Assumptions:
 
-    for bldg in prj.buildings:
-        bldg.thermal_zones[0].use_conditions.heating_profile = profile_living
+        # Convetive internal load is only modelled as Persons, the relative profile is
+        # calcualted with profile/maximum
 
-        bldg.thermal_zones[1].use_conditions.heating_profile = profile_bed_room
+        # Radiative internal load is only modelled as machines, the relative profile is
+        # calculated with profile/maximum
 
-        # total max power of in QNight_zone = 6 W/m² * 64 m² = 384 W
-        # number of max persons for nightzone 3.84
+        # The number of persons is calculated using the maximum value, divided by 100
+        # W/Person divided by total area resulting in Person/m², this is subdivided
+        # 50/50 to day and night zone with same relative profile
 
-        # Update TEASER version 0.7.3
-        # persons : float [Persons/m2]
-        #    Specific number of persons per square area.
-        # Internal Gains are modelled as persons only
-        # Maximum QDay_max = 1280 W
-        # specific power = 20 W/m²
-        # specific Power person = 100 W/Pers
-        # equals specific number of Persion of 20 / 100 = 0.2 Pers/m²
-        # This seems to be a very high value - Check where this values comes from
+        # The specific power of machines is calculated using the maximum value, divided
+        # by total area resulting in Person/m², this is subdivided 50/50
+        # to day and night zone with same relative profile
 
-        bldg.thermal_zones[0].use_conditions.persons = 0.2
+        q_con = pd.read_csv(
+            filepath_or_buffer=os.path.join(occ_path, "0{}_QCon.txt".format(i)),
+            index_col=0,
+            skiprows=2,
+            sep=" ",
+            names=["values"],
+        )
+        q_con.loc[:, "rel_profile"] = q_con["values"] / q_con["values"].max()
+        pers = q_con["values"].max() / 100 / bldg.net_leased_area  # Pers/m²
+
+        q_rad = pd.read_csv(
+            filepath_or_buffer=os.path.join(occ_path, "0{}_QRad.txt".format(i)),
+            index_col=0,
+            skiprows=2,
+            sep=" ",
+            names=["values"],
+        )
+        q_rad.loc[:, "rel_profile"] = q_rad["values"] / q_rad["values"].max()
+        machines = q_rad["values"].max() / bldg.net_leased_area
+
+        bldg.thermal_zones[0].use_conditions.heating_profile = set_temp_living[
+            "values"
+        ].values.tolist()
+
+        bldg.thermal_zones[1].use_conditions.heating_profile = set_temp_bed_room[
+            "values"
+        ].values.tolist()
+
+        bldg.thermal_zones[0].use_conditions.persons = pers * 0.5
         bldg.thermal_zones[0].use_conditions.fixed_heat_flow_rate_persons = 100
+        bldg.thermal_zones[0].use_conditions.ratio_conv_rad_persons = 1
+        bldg.thermal_zones[0].use_conditions.profile_persons = q_con[
+            "rel_profile"
+        ].values.tolist()
 
-        bldg.thermal_zones[0].use_conditions.machines = 0
+        bldg.thermal_zones[0].use_conditions.machines = machines * 0.5  # W/m²
+        bldg.thermal_zones[0].use_conditions.ratio_conv_rad_machines = 0
+        bldg.thermal_zones[0].use_conditions.profile_machines = q_rad[
+            "rel_profile"
+        ].values.tolist()
+
         bldg.thermal_zones[0].use_conditions.lighting_power = 0
         bldg.thermal_zones[0].infiltration_rate = 0.4
-
         bldg.thermal_zones[0].use_conditions.use_constant_ach_rate = True
         bldg.thermal_zones[0].use_conditions.base_ach = 0.4
 
-        # Update TEASER version 0.7.3
-        # persons : float [Persons/m2]
-        #    Specific number of persons per square area.
-        # Internal Gains are modelled as persons only
-        # Maximum QDay_max = 384 W
-        # specific power = 6 W/m²
-        # specific Power person = 100 W/Pers
-        # equals specific number of Persion of 6 / 100 = 0.06 Pers/m²
+        bldg.thermal_zones[1].use_conditions.persons = pers * 0.5
+        bldg.thermal_zones[1].use_conditions.fixed_heat_flow_rate_persons = 100
+        bldg.thermal_zones[1].use_conditions.ratio_conv_rad_persons = 1
+        bldg.thermal_zones[1].use_conditions.profile_persons = q_con[
+            "rel_profile"
+        ].values.tolist()
 
-        bldg.thermal_zones[1].use_conditions.persons = 0.06
-        bldg.thermal_zones[1].use_conditions.machines = 0
+        bldg.thermal_zones[1].use_conditions.machines = machines * 0.5  # W/m²
+        bldg.thermal_zones[1].use_conditions.ratio_conv_rad_machines = 0
+        bldg.thermal_zones[1].use_conditions.profile_machines = q_rad[
+            "rel_profile"
+        ].values.tolist()
+
         bldg.thermal_zones[1].use_conditions.lighting_power = 0
         bldg.thermal_zones[1].infiltration_rate = 0.4
-
         bldg.thermal_zones[1].use_conditions.use_constant_ach_rate = True
         bldg.thermal_zones[1].use_conditions.base_ach = 0.4
 
         # profiles for day and night zone representing the share of total number
         # of persons
-
-        bldg.thermal_zones[0].use_conditions.profile_persons = [
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.1,
-            0.4,
-            0.4,
-            0.4,
-            0.4,
-            0.4,
-            0.4,
-            0.4,
-            0.4,
-            0.4,
-            0.4,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-        ]
-
-        bldg.thermal_zones[1].use_conditions.profile_persons = [
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            0.21,
-            0.21,
-            0.21,
-            0.21,
-            0.21,
-            0.21,
-            0.21,
-            0.21,
-            0.21,
-            0.21,
-            0.3,
-            0.3,
-            0.3,
-            0.3,
-            0.3,
-            0.3,
-            0.3,
-        ]
-
         bldg.thermal_zones[0].model_attr.heat_load = 8024.46
         bldg.thermal_zones[1].model_attr.heat_load = 8548.50
 
@@ -496,7 +449,7 @@ if __name__ == "__main__":
     # belg_type_elements.load_mat_binding()
     # belg_type_elements.load_tb_binding()
     prj = Project(load_data=True)
-    prj.name = "Simple_District_Destest_AixLib"
+    prj.name = "Simple_District_Occ_Destest_AixLib"
     prj.used_library_calc = "AixLib"
     prj.number_of_elements_calc = 2
     prj.weather_file_path = os.path.join(
@@ -505,7 +458,7 @@ if __name__ == "__main__":
         "BEL_Brussels.064510_IWEC.mos",
     )
 
-    prj = example_generate_simple_district_building(prj=prj, nr_of_bldg=1)
+    prj = example_generate_simple_district_building(prj=prj, nr_of_bldg=16)
 
     # To make sure the parameters are calculated correctly we recommend to
     # run calc_all_buildings() function
