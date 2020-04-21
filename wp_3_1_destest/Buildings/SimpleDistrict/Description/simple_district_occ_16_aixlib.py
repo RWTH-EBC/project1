@@ -14,6 +14,7 @@ from dymola.dymola_interface import DymolaInterface
 import pandas as pd
 from teaser.logic.buildingobjects.buildingphysics.layer import Layer
 from teaser.logic.buildingobjects.buildingphysics.material import Material
+import datetime
 
 
 def example_generate_simple_district_building(prj, nr_of_bldg):
@@ -261,7 +262,14 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
             sep=" ",
             names=["values"],
         )
+        set_temp_living.index = pd.date_range(
+            datetime.datetime(2018, 1, 1),
+            periods=len(set_temp_living["values"]),
+            freq="15min",
+        )
+        set_temp_living = set_temp_living.resample("H").mean()
         set_temp_living.loc[:, "values"] = set_temp_living["values"] + 273.15
+
         set_temp_bed_room = pd.read_csv(
             filepath_or_buffer=os.path.join(occ_path, "0{}_sh_night.txt".format(i)),
             index_col=0,
@@ -269,6 +277,12 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
             sep=" ",
             names=["values"],
         )
+        set_temp_bed_room.index = pd.date_range(
+            datetime.datetime(2018, 1, 1),
+            periods=len(set_temp_bed_room["values"]),
+            freq="15min",
+        )
+        set_temp_bed_room = set_temp_bed_room.resample("H").mean()
         set_temp_bed_room.loc[:, "values"] = set_temp_bed_room["values"] + 273.15
         # Load convective and radiative internal loads.
         # Assumptions:
@@ -294,9 +308,13 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
             sep=" ",
             names=["values"],
         )
+        q_con.index = pd.date_range(
+            datetime.datetime(2018, 1, 1), periods=len(q_con["values"]), freq="15min"
+        )
+        q_con = q_con.resample("H").mean()
         q_con.loc[:, "rel_profile"] = q_con["values"] / q_con["values"].max()
         pers = q_con["values"].max() / 100 / bldg.net_leased_area  # Pers/m²
-
+        q_con = q_con.round(2)
         q_rad = pd.read_csv(
             filepath_or_buffer=os.path.join(occ_path, "0{}_QRad.txt".format(i)),
             index_col=0,
@@ -304,9 +322,13 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
             sep=" ",
             names=["values"],
         )
+        q_rad.index = pd.date_range(
+            datetime.datetime(2018, 1, 1), periods=len(q_rad["values"]), freq="15min"
+        )
+        q_rad = q_rad.resample("H").mean()
         q_rad.loc[:, "rel_profile"] = q_rad["values"] / q_rad["values"].max()
         machines = q_rad["values"].max() / bldg.net_leased_area
-
+        q_rad = q_rad.round(2)
         bldg.thermal_zones[0].use_conditions.heating_profile = set_temp_living[
             "values"
         ].values.tolist()
@@ -318,13 +340,13 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         bldg.thermal_zones[0].use_conditions.persons = pers * 0.5
         bldg.thermal_zones[0].use_conditions.fixed_heat_flow_rate_persons = 100
         bldg.thermal_zones[0].use_conditions.ratio_conv_rad_persons = 1
-        bldg.thermal_zones[0].use_conditions.profile_persons = q_con[
+        bldg.thermal_zones[0].use_conditions.persons_profile = q_con[
             "rel_profile"
         ].values.tolist()
 
         bldg.thermal_zones[0].use_conditions.machines = machines * 0.5  # W/m²
         bldg.thermal_zones[0].use_conditions.ratio_conv_rad_machines = 0
-        bldg.thermal_zones[0].use_conditions.profile_machines = q_rad[
+        bldg.thermal_zones[0].use_conditions.machines_profile = q_rad[
             "rel_profile"
         ].values.tolist()
 
@@ -336,13 +358,13 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         bldg.thermal_zones[1].use_conditions.persons = pers * 0.5
         bldg.thermal_zones[1].use_conditions.fixed_heat_flow_rate_persons = 100
         bldg.thermal_zones[1].use_conditions.ratio_conv_rad_persons = 1
-        bldg.thermal_zones[1].use_conditions.profile_persons = q_con[
+        bldg.thermal_zones[1].use_conditions.persons_profile = q_con[
             "rel_profile"
         ].values.tolist()
 
         bldg.thermal_zones[1].use_conditions.machines = machines * 0.5  # W/m²
         bldg.thermal_zones[1].use_conditions.ratio_conv_rad_machines = 0
-        bldg.thermal_zones[1].use_conditions.profile_machines = q_rad[
+        bldg.thermal_zones[1].use_conditions.machines_profile = q_rad[
             "rel_profile"
         ].values.tolist()
 
