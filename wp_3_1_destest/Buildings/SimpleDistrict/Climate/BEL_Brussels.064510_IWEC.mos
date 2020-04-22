@@ -1,5 +1,5 @@
 #1
-double tab1(8761,30)
+double tab1(8760,30)
 #LOCATION,BRUSSELS,-,BEL,IWEC Data,064510,50.90,4.53,1.0,58.0
 #DESIGN CONDITIONS,1,Climate Design Data 2009 ASHRAE Handbook,,Heating,1,-7.7,-5,-11.6,1.4,-6.8,-8.3,1.9,-4.3,14.8,9.2,13.7,8.9,3.1,60,Cooling,7,9.2,29,20.1,27,19.5,25.1,18.6,21.1,27.2,20.1,25.6,19.2,23.9,3.3,60,18.9,13.8,23.7,18,13,22.6,17.1,12.3,21.8,61.1,27.3,57.7,25.7,54.6,23.9,1101,Extremes,11.5,10,8.8,26.9,-9,32.3,3.7,2,-11.7,33.8,-13.9,34.9,-16,36,-18.7,37.5
 #TYPICAL/EXTREME PERIODS,6,Summer - Week Nearest Max Temperature For Period,Extreme,7/ 6,7/12,Summer - Week Nearest Average Temperature For Period,Typical,7/20,7/26,Winter - Week Nearest Min Temperature For Period,Extreme,2/10,2/16,Winter - Week Nearest Average Temperature For Period,Typical,2/ 3,2/ 9,Autumn - Week Nearest Average Temperature For Period,Typical,11/ 3,11/ 9,Spring - Week Nearest Average Temperature For Period,Typical,4/ 5,4/11
@@ -37,7 +37,7 @@ double tab1(8761,30)
 #C27 Days since last snowfall
 #C28 Albedo
 #C29 Liquid precipitation depth in mm at indicated time
-#C30 Liquid precipitation quantity																											
+#C30 Liquid precipitation quantity
 0	10.6	7.3	80	99927	0	0	329	0	0	0	0	0	0	9999	263	2.3	10	9	9999	99999	9	929999999	150	999	999	99	999	999	99
 3600	10.5	6.5	76	99927	0	0	325	0	0	0	0	0	0	9999	252	1.8	10	9	9999	99999	9	999999999	150	999	999	99	999	999	99
 7200	10.3	6	75	99927	0	0	323	0	0	0	0	0	0	9999	249	1.6	10	9	9999	99999	9	999999999	140	999	999	99	999	999	99
@@ -8798,5 +8798,3 @@ double tab1(8761,30)
 31525200	3.7	3.5	98	99950	0	0	305	0	0	0	0	0	0	9999	255	1.2	10	9	9999	99999	9	909999999	120	999	999	99	999	999	99
 31528800	3.3	2.8	97	99960	0	0	302	0	0	0	0	0	0	9999	253	0.8	10	9	9999	99999	9	919999999	110	999	999	99	999	999	99
 31532400	2.7	2.5	98	99970	0	0	299	0	0	0	0	0	0	9999	268	0.9	10	9	9999	99999	9	929999999	110	999	999	99	999	999	99
-31536000	2.7	2.5	98	99970	0	0	299	0	0	0	0	0	0	9999	268	0.9	10	9	9999	99999	9	929999999	110	999	999	99	999	999	99
-

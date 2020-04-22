@@ -14,6 +14,7 @@ from dymola.dymola_interface import DymolaInterface
 import pandas as pd
 from teaser.logic.buildingobjects.buildingphysics.layer import Layer
 from teaser.logic.buildingobjects.buildingphysics.material import Material
+import simulate as sim
 
 
 def example_generate_simple_district_building(prj, nr_of_bldg):
@@ -406,72 +407,6 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
     return prj
 
 
-def results_to_csv(res_path):
-    """
-    This function loads the mat file and save it to csv.
-
-    It loads the dymola result mat file and saves the indoor air temp of
-    the two modelled zones and the total heating power in W.
-    """
-    res_all = pd.DataFrame()
-
-    signals = [
-        "Time",
-        "multizone.PHeater[1]",
-        "multizone.PHeater[2]",
-        "multizone.TAir[1]",
-        "multizone.TAir[2]",
-    ]
-
-    dymola = DymolaInterface()
-    print("Reading signals: ", signals)
-
-    dym_res = dymola.readTrajectory(
-        fileName=res_path,
-        signals=signals,
-        rows=dymola.readTrajectorySize(fileName=res_path),
-    )
-    results = pd.DataFrame().from_records(dym_res).T
-    results = results.rename(columns=dict(zip(results.columns.values, signals)))
-    results.index = results["Time"]
-
-    results["AixLib_Heating_Power_W"] = (
-        results["multizone.PHeater[1]"] + results["multizone.PHeater[2]"]
-    )
-
-    # drop Time and single zones columns
-    results = results.drop(["Time"], axis=1)
-
-    results = results.rename(
-        index=str,
-        columns={
-            "multizone.TAir[1]": "AixLib_T_dayzone",
-            "multizone.TAir[2]": "AixLib_T_nightzone",
-        },
-    )
-
-    # results = results.drop(index_to_drop)
-    # results = results.groupby(level=0).first()
-    # results.to_csv(path=res_path, delimiter=';')
-    dymola.close()
-
-    time = pd.to_numeric(results.index)
-    time -= 31536000
-    results.index = time
-    results = results.ix[0:31536000]
-
-    res_csv = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "AixLib_SingleBuilding.csv"
-    )
-
-    results.to_csv(res_csv)
-
-    print(results)
-    print(res_csv)
-
-    return results
-
-
 if __name__ == "__main__":
 
     # test for new dataclasses for inas materials and typebuildings
@@ -500,7 +435,7 @@ if __name__ == "__main__":
     prj.used_library_calc = "AixLib"
     prj.number_of_elements_calc = 2
     prj.weather_file_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "Climate",
         "BEL_Brussels.064510_IWEC.mos",
     )
@@ -516,6 +451,10 @@ if __name__ == "__main__":
     prj.modelica_info.stop_time = 63072000
 
     prj.export_aixlib(internal_id=None, path=None)
+    workspace = os.path.join("D:\\", "workspace")
+    sim.queue_simulation(
+        sim_function=sim.simulate, prj=prj, results_path=workspace, number_of_workers=4
+    )
 
     print("Example 1: That's it! :)")
 

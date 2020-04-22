@@ -270,6 +270,7 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         )
         set_temp_living = set_temp_living.resample("H").mean()
         set_temp_living.loc[:, "values"] = set_temp_living["values"] + 273.15
+        set_temp_living = set_temp_living.round(2)
 
         set_temp_bed_room = pd.read_csv(
             filepath_or_buffer=os.path.join(occ_path, "0{}_sh_night.txt".format(i)),
@@ -285,6 +286,7 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         )
         set_temp_bed_room = set_temp_bed_room.resample("H").mean()
         set_temp_bed_room.loc[:, "values"] = set_temp_bed_room["values"] + 273.15
+        set_temp_bed_room = set_temp_bed_room.round(2)
         # Load convective and radiative internal loads.
         # Assumptions:
 
@@ -340,13 +342,13 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
 
         bldg.thermal_zones[0].use_conditions.persons = pers * 0.5
         bldg.thermal_zones[0].use_conditions.fixed_heat_flow_rate_persons = 100
-        bldg.thermal_zones[0].use_conditions.ratio_conv_rad_persons = 1
+        bldg.thermal_zones[0].use_conditions.ratio_conv_rad_persons = 0.999
         bldg.thermal_zones[0].use_conditions.persons_profile = q_con[
             "rel_profile"
         ].values.tolist()
 
         bldg.thermal_zones[0].use_conditions.machines = machines * 0.5  # W/m²
-        bldg.thermal_zones[0].use_conditions.ratio_conv_rad_machines = 0
+        bldg.thermal_zones[0].use_conditions.ratio_conv_rad_machines = 0.001
         bldg.thermal_zones[0].use_conditions.machines_profile = q_rad[
             "rel_profile"
         ].values.tolist()
@@ -358,13 +360,13 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
 
         bldg.thermal_zones[1].use_conditions.persons = pers * 0.5
         bldg.thermal_zones[1].use_conditions.fixed_heat_flow_rate_persons = 100
-        bldg.thermal_zones[1].use_conditions.ratio_conv_rad_persons = 1
+        bldg.thermal_zones[1].use_conditions.ratio_conv_rad_persons = 0.999
         bldg.thermal_zones[1].use_conditions.persons_profile = q_con[
             "rel_profile"
         ].values.tolist()
 
         bldg.thermal_zones[1].use_conditions.machines = machines * 0.5  # W/m²
-        bldg.thermal_zones[1].use_conditions.ratio_conv_rad_machines = 0
+        bldg.thermal_zones[1].use_conditions.ratio_conv_rad_machines = 0.001
         bldg.thermal_zones[1].use_conditions.machines_profile = q_rad[
             "rel_profile"
         ].values.tolist()
@@ -475,11 +477,11 @@ if __name__ == "__main__":
     prj.name = "Simple_District_Occ_Destest_AixLib"
     prj.used_library_calc = "AixLib"
     prj.number_of_elements_calc = 2
-    prj.weather_file_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "Climate",
-        "BEL_Brussels.064510_IWEC.mos",
-    )
+    # prj.weather_file_path = os.path.join(
+    #     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    #     "Climate",
+    #     "BEL_Brussels.064510_IWEC.mos",
+    # )
 
     prj = example_generate_simple_district_building(prj=prj, nr_of_bldg=16)
 
@@ -493,9 +495,7 @@ if __name__ == "__main__":
 
     prj.export_aixlib(internal_id=None, path=None)
     workspace = os.path.join("D:\\", "workspace")
-    sim.queue_simulation(
-        sim_function=sim.simulate, prj=prj, results_path=workspace, number_of_workers=4
-    )
+    sim.queue_simulation(sim_function=sim.simulate, prj=prj, results_path=workspace)
 
     print("Example 1: That's it! :)")
 
