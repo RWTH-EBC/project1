@@ -15,6 +15,7 @@ import pandas as pd
 from teaser.logic.buildingobjects.buildingphysics.layer import Layer
 from teaser.logic.buildingobjects.buildingphysics.material import Material
 import datetime
+import simulate as sim
 
 
 def example_generate_simple_district_building(prj, nr_of_bldg):
@@ -475,7 +476,7 @@ if __name__ == "__main__":
     prj.used_library_calc = "AixLib"
     prj.number_of_elements_calc = 2
     prj.weather_file_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "Climate",
         "BEL_Brussels.064510_IWEC.mos",
     )
@@ -491,6 +492,10 @@ if __name__ == "__main__":
     prj.modelica_info.stop_time = 63072000
 
     prj.export_aixlib(internal_id=None, path=None)
+    workspace = os.path.join("D:\\", "workspace")
+    sim.queue_simulation(
+        sim_function=sim.simulate, prj=prj, results_path=workspace, number_of_workers=4
+    )
 
     print("Example 1: That's it! :)")
 
