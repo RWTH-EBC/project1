@@ -48,7 +48,7 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         bldg = prj.add_residential(
             method="tabula_de",
             usage="single_family_house",
-            name="SimpleDistrictBuilding_occ_{}".format(bldg_number),
+            name="SimpleDistrictBuilding_2010_occ_{}".format(bldg_number),
             year_of_construction=1980,
             number_of_floors=2,
             height_of_floors=3.5,
@@ -121,14 +121,14 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
             for win in zone.windows:
                 win.area = 5.6
                 win.layer = None
-                # total u-value = 0.15*4.55+0.75*2.9 ~ 3.15
+                # total u-value = 0.15*2.6+0.75*1.4 ~ 1.58
                 # equivalent thickness with lamda=0.76, alpha out = 25 alpha in = 7.7
-                # d_equivalent = 0.1124
-                win.g_value = 0.78
+                # d_equivalent = 0.4318
+                win.g_value = 0.755
                 win.a_conv = 0.02
                 for lay in layers_ow:
                     temp_layer = Layer(parent=win)
-                    temp_layer.thickness = 0.1124
+                    temp_layer.thickness = 0.4318
                     temp_layer_material = Material(parent=temp_layer)
                     temp_layer_material.name = "Glas_equivalent_lamda0.76"
                     temp_layer_material.density = 1
@@ -136,7 +136,6 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
                     temp_layer_material.heat_capac = 1
                     temp_layer_material.solar_absorp = 0.7
                     temp_layer_material.ir_emissivity = 0.9
-
             if zone.name == "SingleDwelling":
                 zone.rooftops = None
                 for gf in zone.ground_floors:
@@ -477,7 +476,7 @@ if __name__ == "__main__":
     # belg_type_elements.load_mat_binding()
     # belg_type_elements.load_tb_binding()
     prj = Project(load_data=True)
-    prj.name = "Simple_District_Occ_Destest_AixLib"
+    prj.name = "Simple_District_Retrofit2010_Occ_Destest_AixLib"
     prj.used_library_calc = "AixLib"
     prj.number_of_elements_calc = 2
     # prj.weather_file_path = os.path.join(

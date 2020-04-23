@@ -14,7 +14,6 @@ from dymola.dymola_interface import DymolaInterface
 import pandas as pd
 from teaser.logic.buildingobjects.buildingphysics.layer import Layer
 from teaser.logic.buildingobjects.buildingphysics.material import Material
-import datetime
 import simulate as sim
 
 
@@ -48,7 +47,7 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         bldg = prj.add_residential(
             method="tabula_de",
             usage="single_family_house",
-            name="SimpleDistrictBuilding_occ_{}".format(bldg_number),
+            name="SimpleDistrictBuilding_2000_{}".format(bldg_number),
             year_of_construction=1980,
             number_of_floors=2,
             height_of_floors=3.5,
@@ -66,7 +65,7 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         layers_ow = [
             ["HeavyMasonryForExteriorApplications", 0.1, 1850, 1.1, 0.84, 0.55, 0.9],
             ["LargeCavityHorizontalHeatTransfer", 0.1, 100, 0.5555, 0.02, 0.55, 0.9],
-            ["ExpandedPolystrenemOrEPS", 0.01, 26, 0.036, 1.47, 0.8, 0.9],
+            ["Rockwool", 0.07, 110, 0.036, 0.84, 0.8, 0.9],
             ["MediumMasonryForExteriorApplications", 0.14, 1400, 0.75, 0.84, 0.55, 0.9],
             ["GypsumPlasterForFinishing", 0.02, 975, 0.6, 0.84, 0.65, 0.9],
         ]
@@ -79,7 +78,7 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
 
         layers_dz_gf = [
             ["DenseCastConcreteAlsoForFinishing", 0.15, 2100, 1.4, 0.84, 0.55, 0.9],
-            ["ExpandedPolystrenemOrEPS", 0.03, 26, 0.036, 1.47, 0.8, 0.9],
+            ["ExpandedPolystrenemOrEPS", 0.09, 26, 0.036, 1.47, 0.8, 0.9],
             ["ScreedOrLightCastConcrete", 0.08, 1100, 0.6, 0.84, 0.55, 0.9],
             ["CeramicTileForFinishing", 0.02, 2100, 1.4, 0.84, 0.55, 0.9],
         ]
@@ -98,7 +97,7 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         layers_nz_rt = [
             ["CeramicTileForFinishing", 0.025, 2100, 1.4, 0.84, 0.55, 0.9],
             ["LargeCavityVerticalHeatTransfer", 0.1, 100, 0.625, 0.02, 0.85, 0.9],
-            ["Glasswool", 0.04, 80, 0.04, 0.84, 0.85, 0.9],
+            ["Glasswool", 0.12, 80, 0.04, 0.84, 0.85, 0.9],
             ["GypsumPlasterForFinishing", 0.02, 975, 0.6, 0.84, 0.65, 0.9],
         ]
 
@@ -121,14 +120,14 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
             for win in zone.windows:
                 win.area = 5.6
                 win.layer = None
-                # total u-value = 0.15*4.55+0.75*2.9 ~ 3.15
+                # total u-value = 0.15*2.6+0.75*1.4 ~ 1.58
                 # equivalent thickness with lamda=0.76, alpha out = 25 alpha in = 7.7
-                # d_equivalent = 0.1124
-                win.g_value = 0.78
+                # d_equivalent = 0.3519
+                win.g_value = 0.755
                 win.a_conv = 0.02
                 for lay in layers_ow:
                     temp_layer = Layer(parent=win)
-                    temp_layer.thickness = 0.1124
+                    temp_layer.thickness = 0.3519
                     temp_layer_material = Material(parent=temp_layer)
                     temp_layer_material.name = "Glas_equivalent_lamda0.76"
                     temp_layer_material.density = 1
@@ -247,210 +246,168 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
     #         With the first value daily between 7am and 5 pm, the second value
     #         between 5 pm and 11 pm and the third value during night.
 
-    occ_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "Occupants",
-        "Profiles",
-    )
+    profile_living = [
+        291.15,
+        291.15,
+        291.15,
+        291.15,
+        291.15,
+        291.15,
+        291.15,
+        289.15,
+        289.15,
+        289.15,
+        289.15,
+        289.15,
+        289.15,
+        289.15,
+        289.15,
+        289.15,
+        289.15,
+        294.15,
+        294.15,
+        294.15,
+        294.15,
+        294.15,
+        291.15,
+        291.15,
+        291.15,
+    ]
 
-    for i, bldg in enumerate(prj.buildings):
-        # Load set temperature add 273.15 to be in K
-        if i < 9:
-            i = "0{}".format(i + 1)
-        else:
-            i = str(i + 1)
-        set_temp_living = pd.read_csv(
-            filepath_or_buffer=os.path.join(occ_path, "0{}_sh_day.txt".format(i)),
-            index_col=0,
-            skiprows=2,
-            sep=" ",
-            names=["values"],
-        )
-        set_temp_living.index = pd.date_range(
-            datetime.datetime(2018, 1, 1),
-            periods=len(set_temp_living["values"]),
-            freq="15min",
-        )
-        set_temp_living = set_temp_living.resample("H").mean()
-        set_temp_living.loc[:, "values"] = set_temp_living["values"] + 273.15
-        set_temp_living = set_temp_living.round(2)
+    profile_bed_room = [
+        293.15,
+        293.15,
+        293.15,
+        293.15,
+        293.15,
+        293.15,
+        293.15,
+        289.15,
+        289.15,
+        289.15,
+        289.15,
+        289.15,
+        289.15,
+        289.15,
+        289.15,
+        289.15,
+        289.15,
+        291.15,
+        291.15,
+        291.15,
+        291.15,
+        291.15,
+        293.15,
+        293.15,
+        293.15,
+    ]
 
-        set_temp_bed_room = pd.read_csv(
-            filepath_or_buffer=os.path.join(occ_path, "0{}_sh_night.txt".format(i)),
-            index_col=0,
-            skiprows=2,
-            sep=" ",
-            names=["values"],
-        )
-        set_temp_bed_room.index = pd.date_range(
-            datetime.datetime(2018, 1, 1),
-            periods=len(set_temp_bed_room["values"]),
-            freq="15min",
-        )
-        set_temp_bed_room = set_temp_bed_room.resample("H").mean()
-        set_temp_bed_room.loc[:, "values"] = set_temp_bed_room["values"] + 273.15
-        set_temp_bed_room = set_temp_bed_room.round(2)
-        # Load convective and radiative internal loads.
-        # Assumptions:
+    for bldg in prj.buildings:
+        bldg.thermal_zones[0].use_conditions.heating_profile = profile_living
 
-        # Convetive internal load is only modelled as Persons, the relative profile is
-        # calcualted with profile/maximum
+        bldg.thermal_zones[1].use_conditions.heating_profile = profile_bed_room
 
-        # Radiative internal load is only modelled as machines, the relative profile is
-        # calculated with profile/maximum
+        # total max power of in QNight_zone = 6 W/m² * 64 m² = 384 W
+        # number of max persons for nightzone 3.84
 
-        # The number of persons is calculated using the maximum value, divided by 100
-        # W/Person divided by total area resulting in Person/m², this is subdivided
-        # 50/50 to day and night zone with same relative profile
+        # Update TEASER version 0.7.3
+        # persons : float [Persons/m2]
+        #    Specific number of persons per square area.
+        # Internal Gains are modelled as persons only
+        # Maximum QDay_max = 1280 W
+        # specific power = 20 W/m²
+        # specific Power person = 100 W/Pers
+        # equals specific number of Persion of 20 / 100 = 0.2 Pers/m²
+        # This seems to be a very high value - Check where this values comes from
 
-        # The specific power of machines is calculated using the maximum value, divided
-        # by total area resulting in Person/m², this is subdivided 50/50
-        # to day and night zone with same relative profile
-
-        q_con = pd.read_csv(
-            filepath_or_buffer=os.path.join(occ_path, "0{}_QCon.txt".format(i)),
-            index_col=0,
-            skiprows=2,
-            sep=" ",
-            names=["values"],
-        )
-        q_con.index = pd.date_range(
-            datetime.datetime(2018, 1, 1), periods=len(q_con["values"]), freq="15min"
-        )
-        q_con = q_con.resample("H").mean()
-        q_con.loc[:, "rel_profile"] = q_con["values"] / q_con["values"].max()
-        pers = q_con["values"].max() / 100 / bldg.net_leased_area  # Pers/m²
-        q_con = q_con.round(2)
-        q_rad = pd.read_csv(
-            filepath_or_buffer=os.path.join(occ_path, "0{}_QRad.txt".format(i)),
-            index_col=0,
-            skiprows=2,
-            sep=" ",
-            names=["values"],
-        )
-        q_rad.index = pd.date_range(
-            datetime.datetime(2018, 1, 1), periods=len(q_rad["values"]), freq="15min"
-        )
-        q_rad = q_rad.resample("H").mean()
-        q_rad.loc[:, "rel_profile"] = q_rad["values"] / q_rad["values"].max()
-        machines = q_rad["values"].max() / bldg.net_leased_area
-        q_rad = q_rad.round(2)
-        bldg.thermal_zones[0].use_conditions.heating_profile = set_temp_living[
-            "values"
-        ].values.tolist()
-
-        bldg.thermal_zones[1].use_conditions.heating_profile = set_temp_bed_room[
-            "values"
-        ].values.tolist()
-
-        bldg.thermal_zones[0].use_conditions.persons = pers * 0.5
+        bldg.thermal_zones[0].use_conditions.persons = 0.2
         bldg.thermal_zones[0].use_conditions.fixed_heat_flow_rate_persons = 100
-        bldg.thermal_zones[0].use_conditions.ratio_conv_rad_persons = 0.999
-        bldg.thermal_zones[0].use_conditions.persons_profile = q_con[
-            "rel_profile"
-        ].values.tolist()
 
-        bldg.thermal_zones[0].use_conditions.machines = machines * 0.5  # W/m²
-        bldg.thermal_zones[0].use_conditions.ratio_conv_rad_machines = 0.001
-        bldg.thermal_zones[0].use_conditions.machines_profile = q_rad[
-            "rel_profile"
-        ].values.tolist()
-
+        bldg.thermal_zones[0].use_conditions.machines = 0
         bldg.thermal_zones[0].use_conditions.lighting_power = 0
         bldg.thermal_zones[0].infiltration_rate = 0.4
+
         bldg.thermal_zones[0].use_conditions.use_constant_ach_rate = True
-        bldg.thermal_zones[0].use_conditions.base_ach = 0.4
+        bldg.thermal_zones[0].use_conditions.base_ach = 0.2
 
-        bldg.thermal_zones[1].use_conditions.persons = pers * 0.5
-        bldg.thermal_zones[1].use_conditions.fixed_heat_flow_rate_persons = 100
-        bldg.thermal_zones[1].use_conditions.ratio_conv_rad_persons = 0.999
-        bldg.thermal_zones[1].use_conditions.persons_profile = q_con[
-            "rel_profile"
-        ].values.tolist()
+        # Update TEASER version 0.7.3
+        # persons : float [Persons/m2]
+        #    Specific number of persons per square area.
+        # Internal Gains are modelled as persons only
+        # Maximum QDay_max = 384 W
+        # specific power = 6 W/m²
+        # specific Power person = 100 W/Pers
+        # equals specific number of Persion of 6 / 100 = 0.06 Pers/m²
 
-        bldg.thermal_zones[1].use_conditions.machines = machines * 0.5  # W/m²
-        bldg.thermal_zones[1].use_conditions.ratio_conv_rad_machines = 0.001
-        bldg.thermal_zones[1].use_conditions.machines_profile = q_rad[
-            "rel_profile"
-        ].values.tolist()
-
+        bldg.thermal_zones[1].use_conditions.persons = 0.06
+        bldg.thermal_zones[1].use_conditions.machines = 0
         bldg.thermal_zones[1].use_conditions.lighting_power = 0
         bldg.thermal_zones[1].infiltration_rate = 0.4
+
         bldg.thermal_zones[1].use_conditions.use_constant_ach_rate = True
-        bldg.thermal_zones[1].use_conditions.base_ach = 0.4
+        bldg.thermal_zones[1].use_conditions.base_ach = 0.2
 
         # profiles for day and night zone representing the share of total number
         # of persons
+
+        bldg.thermal_zones[0].use_conditions.profile_persons = [
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+        ]
+
+        bldg.thermal_zones[1].use_conditions.profile_persons = [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            0.21,
+            0.21,
+            0.21,
+            0.21,
+            0.21,
+            0.21,
+            0.21,
+            0.21,
+            0.21,
+            0.21,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+        ]
+
         bldg.thermal_zones[0].model_attr.heat_load = 8024.46
         bldg.thermal_zones[1].model_attr.heat_load = 8548.50
 
     return prj
-
-
-def results_to_csv(res_path):
-    """
-    This function loads the mat file and save it to csv.
-
-    It loads the dymola result mat file and saves the indoor air temp of
-    the two modelled zones and the total heating power in W.
-    """
-    res_all = pd.DataFrame()
-
-    signals = [
-        "Time",
-        "multizone.PHeater[1]",
-        "multizone.PHeater[2]",
-        "multizone.TAir[1]",
-        "multizone.TAir[2]",
-    ]
-
-    dymola = DymolaInterface()
-    print("Reading signals: ", signals)
-
-    dym_res = dymola.readTrajectory(
-        fileName=res_path,
-        signals=signals,
-        rows=dymola.readTrajectorySize(fileName=res_path),
-    )
-    results = pd.DataFrame().from_records(dym_res).T
-    results = results.rename(columns=dict(zip(results.columns.values, signals)))
-    results.index = results["Time"]
-
-    results["AixLib_Heating_Power_W"] = (
-        results["multizone.PHeater[1]"] + results["multizone.PHeater[2]"]
-    )
-
-    # drop Time and single zones columns
-    results = results.drop(["Time"], axis=1)
-
-    results = results.rename(
-        index=str,
-        columns={
-            "multizone.TAir[1]": "AixLib_T_dayzone",
-            "multizone.TAir[2]": "AixLib_T_nightzone",
-        },
-    )
-
-    # results = results.drop(index_to_drop)
-    # results = results.groupby(level=0).first()
-    # results.to_csv(path=res_path, delimiter=';')
-    dymola.close()
-
-    time = pd.to_numeric(results.index)
-    time -= 31536000
-    results.index = time
-    results = results.ix[0:31536000]
-
-    res_csv = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "AixLib_SingleBuilding.csv"
-    )
-
-    results.to_csv(res_csv)
-
-    print(results)
-    print(res_csv)
-
-    return results
 
 
 if __name__ == "__main__":
@@ -477,16 +434,16 @@ if __name__ == "__main__":
     # belg_type_elements.load_mat_binding()
     # belg_type_elements.load_tb_binding()
     prj = Project(load_data=True)
-    prj.name = "Simple_District_Occ_Destest_AixLib"
+    prj.name = "Simple_District_Retrofit2000_Destest_AixLib"
     prj.used_library_calc = "AixLib"
     prj.number_of_elements_calc = 2
-    # prj.weather_file_path = os.path.join(
-    #     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    #     "Climate",
-    #     "BEL_Brussels.064510_IWEC.mos",
-    # )
+    prj.weather_file_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "Climate",
+        "BEL_Brussels.064510_IWEC.mos",
+    )
 
-    prj = example_generate_simple_district_building(prj=prj, nr_of_bldg=16)
+    prj = example_generate_simple_district_building(prj=prj, nr_of_bldg=1)
 
     # To make sure the parameters are calculated correctly we recommend to
     # run calc_all_buildings() function
@@ -498,7 +455,9 @@ if __name__ == "__main__":
 
     prj.export_aixlib(internal_id=None, path=None)
     workspace = os.path.join("D:\\", "workspace")
-    sim.queue_simulation(sim_function=sim.simulate, prj=prj, results_path=workspace)
+    sim.queue_simulation(
+        sim_function=sim.simulate, prj=prj, results_path=workspace, number_of_workers=4
+    )
 
     print("Example 1: That's it! :)")
 

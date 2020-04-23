@@ -117,24 +117,28 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
                     temp_layer_material.solar_absorp = lay[5]
                     temp_layer_material.ir_emissivity = lay[6]
 
-            # for an implementation, window area is missing
-
-            # for win in zone.windows:
-            #     win.area = 22.4
-            #     win.layer = None
-            #     for lay in layers_ow:
-            #         temp_layer = Layer(parent=win)
-            #         temp_layer.thickness = lay[1]
-            #         temp_layer_material = Material(parent=temp_layer)
-            #         temp_layer_material.name = lay[0]
-            #         temp_layer_material.density = lay[2]
-            #         temp_layer_material.thermal_conduc = lay[3]
-            #         temp_layer_material.heat_capac = lay[4]
-            #         temp_layer_material.solar_absorp = lay[5]
-            #         temp_layer_material.ir_emissivity = lay[6]
+            for win in zone.windows:
+                win.area = 5.6
+                win.layer = None
+                # total u-value = 0.15*4.55+0.75*2.9 ~ 3.15
+                # equivalent thickness with lamda=0.76, alpha out = 25 alpha in = 7.7
+                # d_equivalent = 0.1124
+                win.g_value = 0.78
+                win.a_conv = 0.02
+                for lay in layers_ow:
+                    temp_layer = Layer(parent=win)
+                    temp_layer.thickness = 0.1124
+                    temp_layer_material = Material(parent=temp_layer)
+                    temp_layer_material.name = "Glas_equivalent_lamda0.76"
+                    temp_layer_material.density = 1
+                    temp_layer_material.thermal_conduc = 0.76
+                    temp_layer_material.heat_capac = 1
+                    temp_layer_material.solar_absorp = 0.7
+                    temp_layer_material.ir_emissivity = 0.9
 
             if zone.name == "SingleDwelling":
                 zone.rooftops = None
+
                 for gf in zone.ground_floors:
                     gf.area = 64
                     gf.layer = None
