@@ -247,11 +247,11 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
     #         between 5 pm and 11 pm and the third value during night.
 
     occ_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "SimpleDistrict",
         "Occupants",
         "Profiles",
     )
-
     for i, bldg in enumerate(prj.buildings):
         # Load set temperature add 273.15 to be in K
         if i < 9:
@@ -479,11 +479,12 @@ if __name__ == "__main__":
     prj.name = "Simple_District_Retrofit2010_Occ_Destest_AixLib"
     prj.used_library_calc = "AixLib"
     prj.number_of_elements_calc = 2
-    # prj.weather_file_path = os.path.join(
-    #     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    #     "Climate",
-    #     "BEL_Brussels.064510_IWEC.mos",
-    # )
+    prj.weather_file_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "SimpleDistrict",
+        "Climate",
+        "BEL_Brussels.064510_IWEC.mos",
+    )
 
     prj = example_generate_simple_district_building(prj=prj, nr_of_bldg=16)
 

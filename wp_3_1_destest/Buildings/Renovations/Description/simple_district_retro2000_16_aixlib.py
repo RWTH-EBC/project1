@@ -438,7 +438,8 @@ if __name__ == "__main__":
     prj.used_library_calc = "AixLib"
     prj.number_of_elements_calc = 2
     prj.weather_file_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "SimpleDistrict",
         "Climate",
         "BEL_Brussels.064510_IWEC.mos",
     )

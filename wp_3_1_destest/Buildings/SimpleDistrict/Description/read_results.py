@@ -80,11 +80,18 @@ if __name__ == "__main__":
     #     if f.endswith(".mat"):
     #         # result_files.append(f)
     #         results_to_csv(os.path.join(workspace, f), name=f.replace(".mat", ""))
-    workspace = os.path.join(
-        "D:\\", "workspace", "results", "Simple_District_Occ_Destest_AixLib"
-    )
+
+    RESULTS = [
+        os.path.join(
+            "D:\\", "workspace", "results", "Simple_District_Occ_Destest_AixLib"
+        ),
+        os.path.join(
+            "D:\\", "workspace", "results", "Simple_District_Occ_Destest_AixLib"
+        ),
+    ]
     result_files = []
-    for f in os.listdir(workspace):
-        if f.endswith(".mat"):
-            # result_files.append(f)
-            results_to_csv(os.path.join(workspace, f), name=f.replace(".mat", ""))
+    for workspace in RESULTS:
+        for f in os.listdir(workspace):
+            if f.endswith(".mat"):
+                # result_files.append(f)
+                results_to_csv(os.path.join(workspace, f), name=f.replace(".mat", ""))
