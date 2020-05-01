@@ -21,7 +21,7 @@ def main():
     # Read node and pipe data
 
     # 16 Buildings
-    node_data = pd.read_csv('Node_data.csv', sep=',')
+    node_data = pd.read_csv('Node data.csv', sep=',')
     node_data = node_data.set_index('Node')
     # imports cvs mit Node, X-Position [m],Y-Position [m],Peak power [kW]
     # SimpleDistrict_7, 80.0,   48.0,   19.347279296900002 -> 16 mal (Häuser)
@@ -184,7 +184,7 @@ def main():
     # Plotting / Visualization with pipe diameters scaling
     vis = ug.Visuals(simple_district)
     vis.show_network(
-        save_as="uesgraph_destest_8_selfsized.png",
+        save_as="uesgraph_destest_16_selfsized_jonas.png",
         show_diameters=True,
         scaling_factor=15,
         labels="name",
