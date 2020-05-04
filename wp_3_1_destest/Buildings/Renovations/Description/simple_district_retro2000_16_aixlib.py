@@ -125,19 +125,19 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
                 # d_equivalent = 0.3519
                 win.g_value = 0.755
                 win.a_conv = 0.02
-                for lay in layers_ow:
-                    temp_layer = Layer(parent=win)
-                    temp_layer.thickness = 0.3519
-                    temp_layer_material = Material(parent=temp_layer)
-                    temp_layer_material.name = "Glas_equivalent_lamda0.76"
-                    temp_layer_material.density = 1
-                    temp_layer_material.thermal_conduc = 0.76
-                    temp_layer_material.heat_capac = 1
-                    temp_layer_material.solar_absorp = 0.7
-                    temp_layer_material.ir_emissivity = 0.9
+                temp_layer = Layer(parent=win)
+                temp_layer.thickness = 0.3519
+                temp_layer_material = Material(parent=temp_layer)
+                temp_layer_material.name = "Glas_equivalent_lamda0.76"
+                temp_layer_material.density = 1
+                temp_layer_material.thermal_conduc = 0.76
+                temp_layer_material.heat_capac = 1
+                temp_layer_material.solar_absorp = 0.7
+                temp_layer_material.ir_emissivity = 0.9
 
             if zone.name == "SingleDwelling":
                 zone.rooftops = None
+
                 for gf in zone.ground_floors:
                     gf.area = 64
                     gf.layer = None
@@ -227,25 +227,6 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
 
     prj.calc_all_buildings()
 
-    # To export the ready-to-run models simply call Project.export_aixlib().
-    # You can specify the path, where the model files should be saved.
-    # None means, that the default path in your home directory
-    # will be used. If you only want to export one specific building, you can
-    # pass over the internal_id of that building and only this model will be
-    # exported. In this case we want to export all buildings to our home
-    # directory, thus we are passing over None for both parameters.
-
-    # final parameter Real[3] QDay(unit="W/m2") = {8,20,2}
-    #     "Specific power for dayzone {day, evening, night}";
-    #   final parameter Real[3] QNight(unit="W/m2") = {1.286,1.857,6}
-    #     "Specific power for nightzone {day, evening, night}";
-    #   final parameter Real[3] TDay(unit="degC") = {16,21,18}
-    #     "Temperature set-points for dayzone {day, evening, night}";
-    #   final parameter Real[3] TNight(unit="degC") = {16,18,20}
-    #     "Temperature set-points for nightzone {day, evening, night}";
-    #         With the first value daily between 7am and 5 pm, the second value
-    #         between 5 pm and 11 pm and the third value during night.
-
     profile_living = [
         291.15,
         291.15,
@@ -320,13 +301,12 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
 
         bldg.thermal_zones[0].use_conditions.persons = 0.2
         bldg.thermal_zones[0].use_conditions.fixed_heat_flow_rate_persons = 100
+        bldg.thermal_zones[0].use_conditions.ratio_conv_rad_persons = 0.5
 
         bldg.thermal_zones[0].use_conditions.machines = 0
         bldg.thermal_zones[0].use_conditions.lighting_power = 0
-        bldg.thermal_zones[0].infiltration_rate = 0.4
-
-        bldg.thermal_zones[0].use_conditions.use_constant_ach_rate = True
-        bldg.thermal_zones[0].use_conditions.base_ach = 0.2
+        bldg.thermal_zones[0].use_conditions.infiltration_rate = 0.2
+        bldg.thermal_zones[0].use_conditions.use_constant_infiltration = True
 
         # Update TEASER version 0.7.3
         # persons : float [Persons/m2]
@@ -338,17 +318,18 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         # equals specific number of Persion of 6 / 100 = 0.06 Pers/m²
 
         bldg.thermal_zones[1].use_conditions.persons = 0.06
+        bldg.thermal_zones[0].use_conditions.fixed_heat_flow_rate_persons = 100
+        bldg.thermal_zones[0].use_conditions.ratio_conv_rad_persons = 0.5
+
         bldg.thermal_zones[1].use_conditions.machines = 0
         bldg.thermal_zones[1].use_conditions.lighting_power = 0
-        bldg.thermal_zones[1].infiltration_rate = 0.4
-
-        bldg.thermal_zones[1].use_conditions.use_constant_ach_rate = True
-        bldg.thermal_zones[1].use_conditions.base_ach = 0.2
+        bldg.thermal_zones[1].use_conditions.infiltration_rate = 0.2
+        bldg.thermal_zones[1].use_conditions.use_constant_infiltration = True
 
         # profiles for day and night zone representing the share of total number
         # of persons
 
-        bldg.thermal_zones[0].use_conditions.profile_persons = [
+        bldg.thermal_zones[0].use_conditions.persons_profile = [
             0.1,
             0.1,
             0.1,
@@ -375,7 +356,7 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
             1.0,
         ]
 
-        bldg.thermal_zones[1].use_conditions.profile_persons = [
+        bldg.thermal_zones[1].use_conditions.persons_profile = [
             1.0,
             1.0,
             1.0,
@@ -410,27 +391,6 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
 
 if __name__ == "__main__":
 
-    # test for new dataclasses for inas materials and typebuildings
-    # not working. can investigate further sadly OS seems to be useless
-
-    # from teaser.data.dataclass import DataClass
-
-    # belg_type_elements = DataClass()
-    # belg_type_elements.element_bind = None
-    # belg_type_elements.path_tb = os.path.join(
-    #     os.path.dirname(
-    #         os.path.abspath(__file__)),
-    #     "Specifications",
-    #     "Belgium_TypeBuildingElements.xml")
-
-    # belg_type_elements.path_mat = os.path.join(
-    #     os.path.dirname(
-    #         os.path.abspath(__file__)),
-    #     "Specifications",
-    #     "Belgium_MaterialTemplates.xml")
-
-    # belg_type_elements.load_mat_binding()
-    # belg_type_elements.load_tb_binding()
     prj = Project(load_data=True)
     prj.name = "Simple_District_Retrofit2000_Destest_AixLib"
     prj.used_library_calc = "AixLib"
@@ -443,7 +403,6 @@ if __name__ == "__main__":
     )
 
     prj = example_generate_simple_district_building(prj=prj, nr_of_bldg=1)
-
     # To make sure the parameters are calculated correctly we recommend to
     # run calc_all_buildings() function
 

@@ -77,7 +77,9 @@ def results_to_csv(res_path, name):
     res_csv = os.path.join(workspace, "AixLib_SFD_1_1980s_{}.csv".format(name))
 
     export.to_csv(res_csv)
-    print(res_csv)
+
+    print(export.sum() / 4)
+    print(export.max())
 
     return results
 

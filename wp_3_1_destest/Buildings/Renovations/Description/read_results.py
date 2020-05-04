@@ -73,10 +73,12 @@ def results_to_csv(res_path, name):
     # results.index = time
     # results = results.ix[0:31536000]
 
-    res_csv = os.path.join(workspace, "AixLib_SFD_1_2010s_{}.csv".format(name))
+    res_csv = os.path.join(workspace, "AixLib_SFD_1_2000s_{}.csv".format(name))
 
     export.to_csv(res_csv)
-    print(res_csv)
+
+    print(export.sum() / 4)
+    print(export.max())
 
     return results
 
@@ -92,30 +94,30 @@ if __name__ == "__main__":
     #         # result_files.append(f)
     #         results_to_csv(os.path.join(workspace, f), name=f.replace(".mat", ""))
     RESULTS = [
-        # os.path.join(
-        #     "D:\\",
-        #     "workspace",
-        #     "results",
-        #     "Simple_District_Retrofit2000_Destest_AixLib",
-        # ),
-        # os.path.join(
-        #     "D:\\",
-        #     "workspace",
-        #     "results",
-        #     "Simple_District_Retrofit2000_Occ_Destest_AixLib",
-        # ),
         os.path.join(
             "D:\\",
             "workspace",
             "results",
-            "Simple_District_Retrofit2010_Destest_AixLib",
+            "Simple_District_Retrofit2000_Destest_AixLib",
         ),
         os.path.join(
             "D:\\",
             "workspace",
             "results",
-            "Simple_District_Retrofit2010_Occ_Destest_AixLib",
+            "Simple_District_Retrofit2000_Occ_Destest_AixLib",
         ),
+        # os.path.join(
+        #     "D:\\",
+        #     "workspace",
+        #     "results",
+        #     "Simple_District_Retrofit2010_Destest_AixLib",
+        # ),
+        # os.path.join(
+        #     "D:\\",
+        #     "workspace",
+        #     "results",
+        #     "Simple_District_Retrofit2010_Occ_Destest_AixLib",
+        # ),
     ]
     result_files = []
     for workspace in RESULTS:
