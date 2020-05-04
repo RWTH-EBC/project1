@@ -335,6 +335,11 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         q_rad.loc[:, "rel_profile"] = q_rad["values"] / q_rad["values"].max()
         machines = q_rad["values"].max() / bldg.net_leased_area
         q_rad = q_rad.round(2)
+
+        import ipdb
+
+        ipdb.set_trace()
+
         bldg.thermal_zones[0].use_conditions.heating_profile = set_temp_living[
             "values"
         ].values.tolist()
@@ -497,7 +502,17 @@ if __name__ == "__main__":
 
     prj.export_aixlib(internal_id=None, path=None)
     workspace = os.path.join("D:\\", "workspace")
-    sim.queue_simulation(sim_function=sim.simulate, prj=prj, results_path=workspace)
+    sim.queue_simulation(
+        sim_function=sim.simulate,
+        prj=prj,
+        results_path=workspace,
+        number_of_workers=1,
+        start_time=prj.modelica_info.start_time,
+        stop_time=prj.modelica_info.stop_time,
+        output_interval=prj.modelica_info.interval_output,
+        method=prj.modelica_info.current_solver,
+        tolerance=0.0001,
+    )
 
     print("Example 1: That's it! :)")
 

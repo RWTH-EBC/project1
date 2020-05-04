@@ -270,8 +270,7 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         294.15,
         294.15,
         294.15,
-        291.15,
-        291.15,
+        294.15,
         291.15,
     ]
 
@@ -298,8 +297,7 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         291.15,
         291.15,
         291.15,
-        293.15,
-        293.15,
+        291.15,
         293.15,
     ]
 
@@ -457,7 +455,15 @@ if __name__ == "__main__":
     prj.export_aixlib(internal_id=None, path=None)
     workspace = os.path.join("D:\\", "workspace")
     sim.queue_simulation(
-        sim_function=sim.simulate, prj=prj, results_path=workspace, number_of_workers=4
+        sim_function=sim.simulate,
+        prj=prj,
+        results_path=workspace,
+        number_of_workers=1,
+        start_time=prj.modelica_info.start_time,
+        stop_time=prj.modelica_info.stop_time,
+        output_interval=prj.modelica_info.interval_output,
+        method=prj.modelica_info.current_solver,
+        tolerance=0.0001,
     )
 
     print("Example 1: That's it! :)")

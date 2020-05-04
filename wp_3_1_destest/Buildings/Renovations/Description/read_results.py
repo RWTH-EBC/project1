@@ -48,6 +48,18 @@ def results_to_csv(res_path, name):
             "multizone.TAir[2]": "AixLib_T_nightzone",
         },
     )
+    export = pd.DataFrame(
+        index=range(0, 31536900, 900),
+        columns=["Qheating_building_W", "Tair_dayzone_K", "Tair_nightzone_K"],
+    )
+    export.index.name = "Datetime"
+    export["Qheating_building_W"] = results["AixLib_Heating_Power_W"][
+        36385 - 35041 : 36385
+    ].values
+    export["Tair_dayzone_K"] = results["AixLib_T_dayzone"][36385 - 35041 : 36385].values
+    export["Tair_nightzone_K"] = results["AixLib_T_nightzone"][
+        36385 - 35041 : 36385
+    ].values
     # import ipdb
     #
     # ipdb.set_trace()
@@ -61,10 +73,9 @@ def results_to_csv(res_path, name):
     # results.index = time
     # results = results.ix[0:31536000]
 
-    res_csv = os.path.join(workspace, "{}.csv".format(name))
+    res_csv = os.path.join(workspace, "AixLib_SFD_1_2010s_{}.csv".format(name))
 
-    results.to_csv(res_csv)
-    print(results)
+    export.to_csv(res_csv)
     print(res_csv)
 
     return results
@@ -81,18 +92,18 @@ if __name__ == "__main__":
     #         # result_files.append(f)
     #         results_to_csv(os.path.join(workspace, f), name=f.replace(".mat", ""))
     RESULTS = [
-        os.path.join(
-            "D:\\",
-            "workspace",
-            "results",
-            "Simple_District_Retrofit2000_Destest_AixLib",
-        ),
-        os.path.join(
-            "D:\\",
-            "workspace",
-            "results",
-            "Simple_District_Retrofit2000_Occ_Destest_AixLib",
-        ),
+        # os.path.join(
+        #     "D:\\",
+        #     "workspace",
+        #     "results",
+        #     "Simple_District_Retrofit2000_Destest_AixLib",
+        # ),
+        # os.path.join(
+        #     "D:\\",
+        #     "workspace",
+        #     "results",
+        #     "Simple_District_Retrofit2000_Occ_Destest_AixLib",
+        # ),
         os.path.join(
             "D:\\",
             "workspace",
@@ -108,7 +119,9 @@ if __name__ == "__main__":
     ]
     result_files = []
     for workspace in RESULTS:
+        i = 0
         for f in os.listdir(workspace):
             if f.endswith(".mat"):
                 # result_files.append(f)
-                results_to_csv(os.path.join(workspace, f), name=f.replace(".mat", ""))
+                i += 1
+                results_to_csv(os.path.join(workspace, f), name=i)

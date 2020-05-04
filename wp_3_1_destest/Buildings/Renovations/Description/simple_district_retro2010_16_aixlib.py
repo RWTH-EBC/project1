@@ -65,7 +65,7 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         layers_ow = [
             ["HeavyMasonryForExteriorApplications", 0.1, 1850, 1.1, 0.84, 0.55, 0.9],
             ["LargeCavityHorizontalHeatTransfer", 0.1, 100, 0.5555, 0.02, 0.55, 0.9],
-            ["Rockwool", 0.07, 110, 0.036, 0.84, 0.8, 0.9],
+            ["Rockwool", 0.13, 110, 0.036, 0.84, 0.8, 0.9],
             ["MediumMasonryForExteriorApplications", 0.14, 1400, 0.75, 0.84, 0.55, 0.9],
             ["GypsumPlasterForFinishing", 0.02, 975, 0.6, 0.84, 0.65, 0.9],
         ]
@@ -78,7 +78,7 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
 
         layers_dz_gf = [
             ["DenseCastConcreteAlsoForFinishing", 0.15, 2100, 1.4, 0.84, 0.55, 0.9],
-            ["ExpandedPolystrenemOrEPS", 0.09, 26, 0.036, 1.47, 0.8, 0.9],
+            ["ExpandedPolystrenemOrEPS", 0.15, 26, 0.036, 1.47, 0.8, 0.9],
             ["ScreedOrLightCastConcrete", 0.08, 1100, 0.6, 0.84, 0.55, 0.9],
             ["CeramicTileForFinishing", 0.02, 2100, 1.4, 0.84, 0.55, 0.9],
         ]
@@ -97,7 +97,7 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         layers_nz_rt = [
             ["CeramicTileForFinishing", 0.025, 2100, 1.4, 0.84, 0.55, 0.9],
             ["LargeCavityVerticalHeatTransfer", 0.1, 100, 0.625, 0.02, 0.85, 0.9],
-            ["Glasswool", 0.12, 80, 0.04, 0.84, 0.85, 0.9],
+            ["Glasswool", 0.26, 80, 0.04, 0.84, 0.85, 0.9],
             ["GypsumPlasterForFinishing", 0.02, 975, 0.6, 0.84, 0.65, 0.9],
         ]
 
@@ -120,10 +120,10 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
             for win in zone.windows:
                 win.area = 5.6
                 win.layer = None
-                # total u-value = 0.15*2.8+0.75*1.1 ~ 1.58
+                # total u-value = 0.15*2.8+0.75*1.1 ~ 1.25
                 # equivalent thickness with lamda=0.76, alpha out = 25 alpha in = 7.7
                 # d_equivalent = 0.4318
-                win.g_value = 0.755
+                win.g_value = 0.589
                 win.a_conv = 0.02
                 for lay in layers_ow:
                     temp_layer = Layer(parent=win)
@@ -269,8 +269,7 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         294.15,
         294.15,
         294.15,
-        291.15,
-        291.15,
+        294.15,
         291.15,
     ]
 
@@ -297,8 +296,7 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         291.15,
         291.15,
         291.15,
-        293.15,
-        293.15,
+        291.15,
         293.15,
     ]
 
@@ -457,7 +455,15 @@ if __name__ == "__main__":
     prj.export_aixlib(internal_id=None, path=None)
     workspace = os.path.join("D:\\", "workspace")
     sim.queue_simulation(
-        sim_function=sim.simulate, prj=prj, results_path=workspace, number_of_workers=4
+        sim_function=sim.simulate,
+        prj=prj,
+        results_path=workspace,
+        number_of_workers=1,
+        start_time=prj.modelica_info.start_time,
+        stop_time=prj.modelica_info.stop_time,
+        output_interval=prj.modelica_info.interval_output,
+        method=prj.modelica_info.current_solver,
+        tolerance=0.0001,
     )
 
     print("Example 1: That's it! :)")
