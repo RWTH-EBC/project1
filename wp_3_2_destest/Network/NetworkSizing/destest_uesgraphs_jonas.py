@@ -215,7 +215,7 @@ def main():
     # To generate a generic Modelica model the create_model function is used.
     # There are 21 parameters available.
     sysmod_utils.create_model(
-        name="Pinola_open_loop_dT_var",
+        name="Destest_Jonas_von_E11_Pinola",
         save_at=dir_model,
         graph=simple_district,
         stop_time=end_time,
