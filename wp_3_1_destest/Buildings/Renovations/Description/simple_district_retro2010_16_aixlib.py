@@ -120,7 +120,7 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
             for win in zone.windows:
                 win.area = 5.6
                 win.layer = None
-                # total u-value = 0.15*2.8+0.75*1.1 ~ 1.25
+                # total u-value = 0.15*2.8+0.85*1.1 ~ 1.35
                 # equivalent thickness with lamda=0.76, alpha out = 25 alpha in = 7.7
                 # d_equivalent = 0.4318
                 win.g_value = 0.589
@@ -318,8 +318,8 @@ def example_generate_simple_district_building(prj, nr_of_bldg):
         # equals specific number of Persion of 6 / 100 = 0.06 Pers/m²
 
         bldg.thermal_zones[1].use_conditions.persons = 0.06
-        bldg.thermal_zones[0].use_conditions.fixed_heat_flow_rate_persons = 100
-        bldg.thermal_zones[0].use_conditions.ratio_conv_rad_persons = 0.5
+        bldg.thermal_zones[1].use_conditions.fixed_heat_flow_rate_persons = 100
+        bldg.thermal_zones[1].use_conditions.ratio_conv_rad_persons = 0.5
 
         bldg.thermal_zones[1].use_conditions.machines = 0
         bldg.thermal_zones[1].use_conditions.lighting_power = 0
