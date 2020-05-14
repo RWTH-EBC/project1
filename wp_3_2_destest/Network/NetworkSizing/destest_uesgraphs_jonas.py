@@ -82,19 +82,19 @@ def main():
         simple_district.edges[
             simple_district.nodes_by_name[row['Beginning Node']],
             simple_district.nodes_by_name[row['Ending Node']]][
-                'diameter'] = row['Inner Diameter [m]']
+            'diameter'] = row['Inner Diameter [m]']
         simple_district.edges[
             simple_district.nodes_by_name[row['Beginning Node']],
             simple_district.nodes_by_name[row['Ending Node']]][
-                'length'] = row['Length [m]']
+            'length'] = row['Length [m]']
         simple_district.edges[
             simple_district.nodes_by_name[row['Beginning Node']],
             simple_district.nodes_by_name[row['Ending Node']]][
-                'dIns'] = row['Insulation Thickness [m]']
+            'dIns'] = row['Insulation Thickness [m]']
         simple_district.edges[
             simple_district.nodes_by_name[row['Beginning Node']],
             simple_district.nodes_by_name[row['Ending Node']]][
-                'kIns'] = row['U-value [W/mK]']
+            'kIns'] = row['U-value [W/mK]']
 
     # Plotting / Visualization with pipe diameters scaling
     vis = ug.Visuals(simple_district)
@@ -141,14 +141,15 @@ def main():
 
     for node in simple_district.nodelist_building:
         simple_district.nodes[node]['dT_design'] = 20
-        simple_district.nodes[node]['m_flo_bypass'] = 0.5  #wird dem mako tempalte übergeben um personalisierte .mo files zu schreiben
+        simple_district.nodes[node][
+            'm_flo_bypass'] = 0.5  # wird dem mako tempalte übergeben um personalisierte .mo files zu schreiben
 
     for edge in simple_district.edges():
         simple_district.edges[edge[0], edge[1]]['name'] = \
             str(edge[0]) + 'to' + str(edge[1])
         simple_district.edges[edge[0], edge[1]]['m_flow_nominal'] = 1
         simple_district.edges[edge[0], edge[1]]['fac'] = 1.0
-        simple_district.edges[edge[0], edge[1]]['roughness'] = 2.5e-5   # Ref
+        simple_district.edges[edge[0], edge[1]]['roughness'] = 2.5e-5  # Ref
 
     print("####")
 
@@ -196,7 +197,19 @@ def main():
     for edge in simple_district.edges:
         print(simple_district.edges[edge[0], edge[1]]["diameter"])
 
-    #### Copied and modified from e11 ####
+    # .prepare_graph() variables, for dynamic model naming
+    t_sup = 90
+    p_sup = 13e5
+    t_ret = 50
+    p_ret = 2e5
+    dt_des = 40
+    m_flo_nom = 1
+
+    # .create_model() variables, for dynamic model naming
+    t_nom = 40  # equals T_Ambient in Dymola?
+    p_nom = 3e5
+
+    # Copied and modified from e11
     # To add data for model generation to the uesgraph the prepare_graph
     # function is used. There are thirteen parameters available. Below the supply
     # temperature in K, supply pressure in Pa, return temperature in K,
@@ -204,31 +217,32 @@ def main():
     # and the nominal mass flow rate in kg/s are added to the graph.
     simple_district = sysmod_utils.prepare_graph(
         graph=simple_district,
-        T_supply=[273.15 + 90],
-        p_supply=13e5,
-        T_return=273.15 + 45,   #funktion aus t_supply ind dT_design -> könnte man auch weglassen?
-        p_return=2e5,
-        dT_design=30,
-        m_flow_nominal=1,
+        T_supply=273.15 + t_sup,
+        p_supply=p_sup,
+        T_return=273.15 + t_ret,  # function aus t_supply ind dT_design? -> könnte man auch weglassen?
+        p_return=p_ret,
+        dT_design=dt_des,
+        m_flow_nominal=m_flo_nom,
     )
 
-    # ---Copied and modified from e11---
     # To generate a generic Modelica model the create_model function is used.
     # There are 21 parameters available.
     sysmod_utils.create_model(
-        name="Destest_Jonas_von_E11_Pinola_test_bypass_45_70_90",
+        name="Destest_Jonas__T_{}_{}_{}__dT_{}__p_{:.0f}_{:.0f}_{:.0f}"
+            .format(t_sup, t_nom, t_ret, dt_des, p_sup / 1e5, p_nom / 1e5, p_ret / 1e5),
+        # {} are placeholders, :.0f rounds to 0 digits. Pressusre is divided to show Unit in [bar]
         save_at=dir_model,
         graph=simple_district,
         stop_time=end_time,
         timestep=time_step,
         model_supply='AixLib.Fluid.DistrictHeatingCooling.Supplies.OpenLoop.SourceIdeal',
         model_demand='AixLib.Fluid.DistrictHeatingCooling.Demands.OpenLoop.VarTSupplyDpFixedTempDifferenceBypass',
-        # model_demand='AixLib.Fluid.DistrictHeatingCooling.Demands.OpenLoop.VarTSupplyDp',    # aus E11
+        # model_demand='AixLib.Fluid.DistrictHeatingCooling.Demands.OpenLoop.VarTSupplyDp',  # aus E11
         model_pipe="AixLib.Fluid.FixedResistances.PlugFlowPipe",
         model_medium="AixLib.Media.Specialized.Water.ConstantProperties_pT",
         model_ground="t_ground_table",
-        T_nominal=273.15 + 70,
-        p_nominal=3e5,
+        T_nominal=273.15 + t_nom,
+        p_nominal=p_nom,
     )
 
 
