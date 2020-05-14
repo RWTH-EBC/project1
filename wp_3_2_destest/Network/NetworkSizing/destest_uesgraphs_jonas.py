@@ -99,7 +99,7 @@ def main():
     # Plotting / Visualization with pipe diameters scaling
     vis = ug.Visuals(simple_district)
     vis.show_network(
-        save_as="uesgraph_destest_8.png",
+        save_as="uesgraph_destest_16.png",
         show_diameters=True,
         scaling_factor=15,
         labels="name",
@@ -141,6 +141,7 @@ def main():
 
     for node in simple_district.nodelist_building:
         simple_district.nodes[node]['dT_design'] = 20
+        simple_district.nodes[node]['m_flo_bypass'] = 0.5  #wird dem mako tempalte übergeben um personalisierte .mo files zu schreiben
 
     for edge in simple_district.edges():
         simple_district.edges[edge[0], edge[1]]['name'] = \
@@ -203,9 +204,9 @@ def main():
     # and the nominal mass flow rate in kg/s are added to the graph.
     simple_district = sysmod_utils.prepare_graph(
         graph=simple_district,
-        T_supply=[273.15 + 80],
+        T_supply=[273.15 + 90],
         p_supply=13e5,
-        T_return=273.15 + 50,
+        T_return=273.15 + 45,   #funktion aus t_supply ind dT_design -> könnte man auch weglassen?
         p_return=2e5,
         dT_design=30,
         m_flow_nominal=1,
@@ -215,18 +216,18 @@ def main():
     # To generate a generic Modelica model the create_model function is used.
     # There are 21 parameters available.
     sysmod_utils.create_model(
-        name="Destest_Jonas_von_E11_Pinola",
+        name="Destest_Jonas_von_E11_Pinola_test_bypass_45_70_90",
         save_at=dir_model,
         graph=simple_district,
         stop_time=end_time,
         timestep=time_step,
         model_supply='AixLib.Fluid.DistrictHeatingCooling.Supplies.OpenLoop.SourceIdeal',
-        # model_demand='AixLib.Fluid.DistrictHeatingCooling.Demands.OpenLoop.VarTSupplyDpFixedTempDifferenceBypass',
-        model_demand='AixLib.Fluid.DistrictHeatingCooling.Demands.OpenLoop.VarTSupplyDp',    # aus E11
+        model_demand='AixLib.Fluid.DistrictHeatingCooling.Demands.OpenLoop.VarTSupplyDpFixedTempDifferenceBypass',
+        # model_demand='AixLib.Fluid.DistrictHeatingCooling.Demands.OpenLoop.VarTSupplyDp',    # aus E11
         model_pipe="AixLib.Fluid.FixedResistances.PlugFlowPipe",
         model_medium="AixLib.Media.Specialized.Water.ConstantProperties_pT",
         model_ground="t_ground_table",
-        T_nominal=273.15 + 35,
+        T_nominal=273.15 + 70,
         p_nominal=3e5,
     )
 
