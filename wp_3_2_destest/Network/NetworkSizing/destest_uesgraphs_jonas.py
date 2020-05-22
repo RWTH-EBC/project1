@@ -18,47 +18,45 @@ def main():
     Exported to a json
     """
 
-    # Read node and pipe data
-
-    # 16 Buildings
+    # Read node and pipe data for 16 buildings
     node_data = pd.read_csv('Node data.csv', sep=',')
     node_data = node_data.set_index('Node')
-    # imports cvs mit Node, X-Position [m],Y-Position [m],Peak power [kW]
-    # SimpleDistrict_7, 80.0,   48.0,   19.347279296900002 -> 16 mal (Häuser)
-    # a,    20.0,   72.0,   38.694558593800004  -> 9 mal (network nodes)
+    # imports cvs with Node, X-Position [m],Y-Position [m],Peak power [kW]
+    # SimpleDistrict_7, 80.0,   48.0,   19.347279296900002 -> 16 times (building nodes)
+    # a,    20.0,   72.0,   38.694558593800004  -> 9 times (network nodes)
 
     pipe_data = pd.read_csv('Pipe_data.csv', sep=',')
     # Beginning Node, Ending Node, Length [m], Inner Diameter [m],
     # Insulation Thickness [m], Peak Load [kW], Total pressure loss [Pa/m], U-value [W/mK]
+    # there are 24 pipes for th 16 building network.
 
-    # rename node 'i' to 'Destest_Supply' for usability
+    # rename node 'i' to 'Destest_Supply' for better usability
     pipe_data = pipe_data.replace(to_replace='i', value='Destest_Supply')
 
     # create emtpy uesgraph object
     simple_district = ug.UESGraph()
 
     # Add supply exemplary as a single addition, same coordinates as in node_data
-    supply_heating_1 = simple_district.add_building(
-        name="Destest_Supply", position=Point(44.0, -12.0),
-        is_supply_heating=True)
+    # would be more consistent if the coordinates would be taken right out of the node_data.csv!
+    supply_heating_1 = simple_district.add_building(name="Destest_Supply", position=Point(44.0, -12.0),
+                                                    is_supply_heating=True)
 
     # Add building and network nodes from node_data to the uesgraph object
     for node_name, values in node_data.iterrows():
-        if node_name.startswith("Simple"):
+        if node_name.startswith("Simple"):  # all Simple_districs are added as buildings
             simple_district.add_building(
                 name=node_name,
-                position=Point(
-                    values['X-Position [m]'], values['Y-Position [m]']),
+                position=Point(values['X-Position [m]'], values['Y-Position [m]']),
                 is_supply_heating=False)
         else:
             simple_district.add_network_node(
                 'heating',
                 name=node_name,
-                position=Point(
-                    values['X-Position [m]'], values['Y-Position [m]']),
+                position=Point(values['X-Position [m]'], values['Y-Position [m]']),
                 is_supply_heating=False)
 
     # Help dictionary for drawing the connections / edges 16 buildings
+    # total of 24 connections/pipes (each network nodes is connected to 3 other nodes)
     connection_dict_heating_nodes = {
         "a": ["b", "SimpleDistrict_2", "SimpleDistrict_3"],
         "b": ["c", "SimpleDistrict_5", "SimpleDistrict_6"],
@@ -70,14 +68,14 @@ def main():
         "h": ["Destest_Supply", "SimpleDistrict_14", "SimpleDistrict_13"],
     }
 
-    # Adding the edges
+    # Adding the connections to the uesgraph object as edges
     for key, values in connection_dict_heating_nodes.items():
         for value in values:
             simple_district.add_edge(
                 simple_district.nodes_by_name[key],
                 simple_district.nodes_by_name[value])
 
-    # Add Diameter and Length information
+    # Add Diameter and Length information to the edges from pipe_data.csv
     for index, row in pipe_data.iterrows():
         simple_district.edges[
             simple_district.nodes_by_name[row['Beginning Node']],
@@ -97,6 +95,7 @@ def main():
             'kIns'] = row['U-value [W/mK]']
 
     # Plotting / Visualization with pipe diameters scaling
+    # not needed for model creation, just for checking
     vis = ug.Visuals(simple_district)
     vis.show_network(
         save_as="uesgraph_destest_16.png",
@@ -107,7 +106,9 @@ def main():
         scaling_factor_diameter=100
     )
 
-    # write demand data to graph
+    # write demand data to graphs building nodes
+    # all Simple_Districts have the same demand at each timestep
+    # demands differ for every timestep
 
     demand_data = pd.read_csv(
         'https://raw.githubusercontent.com/ibpsa/project1/master/wp_3_1_destest/Buildings/SimpleDistrict/Results/SimpleDistrict_IDEAS/SimpleDistrict_district.csv',
@@ -116,33 +117,37 @@ def main():
 
     demand_data.columns = demand_data.columns.str.replace(' / W', '')
 
+    # only the demand for one District is taken (as they're all the same)
+    # this demand is rounded to 1 digit for better readability
     demand = demand_data["SimpleDistrict_1"].values
     demand = [round(x, 1) for x in demand]
 
+    # demand is written to every Simple district as
     for bldg in simple_district.nodelist_building:
         if not simple_district.nodes[bldg]['is_supply_heating']:
             simple_district.nodes[bldg]['input_heat'] = demand
             simple_district.nodes[bldg]['max_demand_heating'] = max(demand)
-        else:
-            simple_district.nodes[bldg]['T_supply'] = [273.15 + 50]
-            simple_district.nodes[bldg]['p_supply'] = [3.4e5]
+       # else:
+            # do i need this setting? or is it overwritten anyways by the prepare graph function?
+            #simple_district.nodes[bldg]['T_supply'] = [273.15 + 50]
+            #simple_district.nodes[bldg]['p_supply'] = [3.4e5]
 
-    # write general simulation data to graph
-    # values needs to be revised for common excersise
-
+    # write general simulation data to graph, doesnt that happen with the .prepare_model function?
     end_time = 365 * 24 * 3600
     time_step = 600
     n_steps = end_time / time_step
 
     simple_district.graph['network_type'] = 'heating'
-    simple_district.graph['T_nominal'] = 273.15 + 50
-    simple_district.graph['p_nominal'] = 3e5
-    simple_district.graph['T_ground'] = [285.15] * int(n_steps)
+    #simple_district.graph['T_nominal'] = 273.15 + 50
+    #simple_district.graph['p_nominal'] = 3e5
+    #simple_district.graph['T_ground'] = [285.15] * int(n_steps)
+
+    m_flo_bypass = 0.005  # set as variable for dynamic model naming
 
     for node in simple_district.nodelist_building:
         simple_district.nodes[node]['dT_design'] = 20
         simple_district.nodes[node][
-            'm_flo_bypass'] = 0.5  # wird dem mako tempalte übergeben um personalisierte .mo files zu schreiben
+            'm_flo_bypass'] = m_flo_bypass  # wird dem mako tempalte übergeben um personalisierte .mo files zu schreiben
 
     for edge in simple_district.edges():
         simple_district.edges[edge[0], edge[1]]['name'] = \
@@ -198,50 +203,47 @@ def main():
         print(simple_district.edges[edge[0], edge[1]]["diameter"])
 
     # .prepare_graph() variables, for dynamic model naming
-    t_sup = 90
+    t_sup = [273.15 + 87]   # has to be a list object to work properly with th .prepare_graph function
     p_sup = 13e5
-    t_ret = 50
+    t_ret = 273.15 + 57  # function of T_supply and dT_design?
     p_ret = 2e5
-    dt_des = 40
+    dt_des = 30
     m_flo_nom = 1
 
     # .create_model() variables, for dynamic model naming
-    t_nom = 40  # equals T_Ambient in Dymola?
+    t_nom = 273.15 + 30  # equals T_Ambient in Dymola? Start value for every pipe?
     p_nom = 3e5
 
     # Copied and modified from e11
-    # To add data for model generation to the uesgraph the prepare_graph
-    # function is used. There are thirteen parameters available. Below the supply
-    # temperature in K, supply pressure in Pa, return temperature in K,
-    # return pressure in Pa, Design temperature difference over substation in K
-    # and the nominal mass flow rate in kg/s are added to the graph.
     simple_district = sysmod_utils.prepare_graph(
         graph=simple_district,
-        T_supply=273.15 + t_sup,
+        T_supply=t_sup,
         p_supply=p_sup,
-        T_return=273.15 + t_ret,  # function aus t_supply ind dT_design? -> könnte man auch weglassen?
+        T_return=t_ret,  # function aus t_supply ind dT_design? -> redundant?
         p_return=p_ret,
         dT_design=dt_des,
         m_flow_nominal=m_flo_nom,
     )
 
-    # To generate a generic Modelica model the create_model function is used.
-    # There are 21 parameters available.
+    # To generate a generic Modelica model the create_model function is used. There are 21 parameters available.
     sysmod_utils.create_model(
-        name="Destest_Jonas__T_{}_{}_{}__dT_{}__p_{:.0f}_{:.0f}_{:.0f}"
-            .format(t_sup, t_nom, t_ret, dt_des, p_sup / 1e5, p_nom / 1e5, p_ret / 1e5),
-        # {} are placeholders, :.0f rounds to 0 digits. Pressusre is divided to show Unit in [bar]
+        name="Destest_Jonas__T_{:.0f}_{:.0f}_{:.0f}__dT_{}__p_{:.0f}_{:.0f}_{:.0f}__mNom_{:.0f}__mByGram_{:.0f}"
+            .format(t_sup[0] - 273.15, t_nom - 273.15, t_ret - 273.15, dt_des,
+                    p_sup / 1e5, p_nom / 1e5, p_ret / 1e5, m_flo_nom, m_flo_bypass * 1e3),
+        # {} are placeholders, :.0f rounds to 0 digits. Pressure is divided to show Unit in [bar], Temperature in [°C]
+        # often there are problems with Dymola when model names
+        # have different Symbols than Letters, Numbers and Underscores
         save_at=dir_model,
         graph=simple_district,
         stop_time=end_time,
         timestep=time_step,
         model_supply='AixLib.Fluid.DistrictHeatingCooling.Supplies.OpenLoop.SourceIdeal',
-        model_demand='AixLib.Fluid.DistrictHeatingCooling.Demands.OpenLoop.VarTSupplyDpFixedTempDifferenceBypass',
-        # model_demand='AixLib.Fluid.DistrictHeatingCooling.Demands.OpenLoop.VarTSupplyDp',  # aus E11
+        # model_demand='AixLib.Fluid.DistrictHeatingCooling.Demands.OpenLoop.VarTSupplyDpFixedTempDifferenceBypass',
+        model_demand='AixLib.Fluid.DistrictHeatingCooling.Demands.OpenLoop.VarTSupplyDp',  # aus E11
         model_pipe="AixLib.Fluid.FixedResistances.PlugFlowPipe",
         model_medium="AixLib.Media.Specialized.Water.ConstantProperties_pT",
         model_ground="t_ground_table",
-        T_nominal=273.15 + t_nom,
+        T_nominal=t_nom,
         p_nominal=p_nom,
     )
 
