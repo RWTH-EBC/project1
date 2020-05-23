@@ -14,8 +14,7 @@ def main():
     """
     Defines a building node dictionary and adds it to the graph.
     Adds network nodes to the graph and creates a district heating network
-    graph.
-    Exported to a json
+    graph. Creates a Modelica Model of the Graph.
     """
 
     # Read node and pipe data for 16 buildings
@@ -106,53 +105,41 @@ def main():
         scaling_factor_diameter=100
     )
 
-    # write demand data to graphs building nodes
-    # all Simple_Districts have the same demand at each timestep
-    # demands differ for every timestep
-
+    # write demand data to graphs building nodes. all Simple_Districts have the same demand at each time step
+    # demands differ for every time step
     demand_data = pd.read_csv(
-        'https://raw.githubusercontent.com/ibpsa/project1/master/wp_3_1_destest/Buildings/SimpleDistrict/Results/SimpleDistrict_IDEAS/SimpleDistrict_district.csv',
+        'https://raw.githubusercontent.com/ibpsa/project1/master/wp_3_1_destest/'
+        + 'Buildings/SimpleDistrict/Results/SimpleDistrict_IDEAS/SimpleDistrict_district.csv',
         sep=';',
         index_col=0)
 
-    demand_data.columns = demand_data.columns.str.replace(' / W', '')
+    demand_data.columns = demand_data.columns.str.replace(' / W', '')   # rename demand
+    demand = demand_data["SimpleDistrict_1"].values  # only demand for one District is taken (as they're all the same)
+    demand = [round(x, 1) for x in demand]  # this demand is rounded to 1 digit for better readability
 
-    # only the demand for one District is taken (as they're all the same)
-    # this demand is rounded to 1 digit for better readability
-    demand = demand_data["SimpleDistrict_1"].values
-    demand = [round(x, 1) for x in demand]
-
+    m_flo_bypass = 0.005  # set as variable for dynamic model naming
     # demand is written to every Simple district as
     for bldg in simple_district.nodelist_building:
+        simple_district.nodes[bldg]['dT_design'] = 20  # part of .prepare_graph function
+        simple_district.nodes[bldg]['m_flo_bypass'] = m_flo_bypass  # not (yet) part of .prepare_graph function!
         if not simple_district.nodes[bldg]['is_supply_heating']:
             simple_district.nodes[bldg]['input_heat'] = demand
             simple_district.nodes[bldg]['max_demand_heating'] = max(demand)
        # else:
-            # do i need this setting? or is it overwritten anyways by the prepare graph function?
-            #simple_district.nodes[bldg]['T_supply'] = [273.15 + 50]
-            #simple_district.nodes[bldg]['p_supply'] = [3.4e5]
+            #do i need this setting? or is it overwritten anyways by the prepare graph function?
+            # simple_district.nodes[bldg]['T_supply'] = [273.15 + 50]
+            # simple_district.nodes[bldg]['p_supply'] = [3.4e5]
 
     # write general simulation data to graph, doesnt that happen with the .prepare_model function?
-    end_time = 365 * 24 * 3600
-    time_step = 600
-    n_steps = end_time / time_step
-
     simple_district.graph['network_type'] = 'heating'
-    #simple_district.graph['T_nominal'] = 273.15 + 50
-    #simple_district.graph['p_nominal'] = 3e5
-    #simple_district.graph['T_ground'] = [285.15] * int(n_steps)
-
-    m_flo_bypass = 0.005  # set as variable for dynamic model naming
-
-    for node in simple_district.nodelist_building:
-        simple_district.nodes[node]['dT_design'] = 20
-        simple_district.nodes[node][
-            'm_flo_bypass'] = m_flo_bypass  # wird dem mako tempalte übergeben um personalisierte .mo files zu schreiben
+    # simple_district.graph['T_nominal'] = 273.15 + 50   # needed?
+    # simple_district.graph['p_nominal'] = 3e5   # needed?
+    simple_district.graph['T_ground'] = [285.15] * int(52560) # sets ground temp for every 10min time step.
 
     for edge in simple_district.edges():
         simple_district.edges[edge[0], edge[1]]['name'] = \
             str(edge[0]) + 'to' + str(edge[1])
-        simple_district.edges[edge[0], edge[1]]['m_flow_nominal'] = 1
+        simple_district.edges[edge[0], edge[1]]['m_flow_nominal'] = 1   # part of the prepare graph function
         simple_district.edges[edge[0], edge[1]]['fac'] = 1.0
         simple_district.edges[edge[0], edge[1]]['roughness'] = 2.5e-5  # Ref
 
@@ -174,13 +161,11 @@ def main():
         os.mkdir(dir_model)
 
     for edge in simple_district.edges:
-        print(simple_district.edges[edge[0], edge[1]]["diameter"])
-
-    for edge in simple_district.edges:
-        simple_district.edges[edge[0], edge[1]]["diameter"] = 0
+        print("diameter: " + str(simple_district.edges[edge[0], edge[1]]["diameter"]))  # why print this?
 
     print("####")
 
+    # what for?
     simple_district = utils.size_hydronic_network(
         graph=simple_district,
         network_type="heating",
@@ -196,14 +181,10 @@ def main():
         scaling_factor=15,
         labels="name",
         label_size=10,
-        scaling_factor_diameter=100
-    )
-
-    for edge in simple_district.edges:
-        print(simple_district.edges[edge[0], edge[1]]["diameter"])
+        scaling_factor_diameter=100)
 
     # .prepare_graph() variables, for dynamic model naming
-    t_sup = [273.15 + 87]   # has to be a list object to work properly with th .prepare_graph function
+    t_sup = [273.15 + 87]   # has to be a list object to work properly with the .prepare_graph function
     p_sup = 13e5
     t_ret = 273.15 + 57  # function of T_supply and dT_design?
     p_ret = 2e5
@@ -235,8 +216,8 @@ def main():
         # have different Symbols than Letters, Numbers and Underscores
         save_at=dir_model,
         graph=simple_district,
-        stop_time=end_time,
-        timestep=time_step,
+        stop_time=365 * 24 * 3600,
+        timestep=600,
         model_supply='AixLib.Fluid.DistrictHeatingCooling.Supplies.OpenLoop.SourceIdeal',
         # model_demand='AixLib.Fluid.DistrictHeatingCooling.Demands.OpenLoop.VarTSupplyDpFixedTempDifferenceBypass',
         model_demand='AixLib.Fluid.DistrictHeatingCooling.Demands.OpenLoop.VarTSupplyDp',  # aus E11
@@ -248,6 +229,5 @@ def main():
     )
 
 
-# Main function
 if __name__ == '__main__':
     main()
