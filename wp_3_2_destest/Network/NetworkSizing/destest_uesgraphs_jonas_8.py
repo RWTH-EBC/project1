@@ -1,12 +1,9 @@
 # -*- coding: utf-8 -*-
 
-import datetime
 import uesgraphs as ug
 from shapely.geometry import Point
 import pandas as pd
 import os
-
-from uesgraphs.uesmodels.utilities import utilities as utils
 from uesgraphs.systemmodels import utilities as sysmod_utils
 
 
@@ -17,11 +14,25 @@ def main():
     graph. Creates a Modelica Model of the Graph.
     """
 
-    node_data = pd.read_csv('Node data.csv', sep=',')
+    # Parameters
+    t_sup = 273.15 + 86
+    t_nom = 273.15 + 60  # equals T_Ambient in Dymola? Start value for every pipe?
+    dt_des = 30
+    t_ret = t_sup - dt_des  # function of T_supply and dT_design?
+    t_grnd = 273.15 + 10
+
+    p_sup = 4e5
+    p_nom = 3e5
+    p_ret = 2e5
+
+    m_flo_nom = 1
+    m_flo_bypass = 0.5
+
+    node_data = pd.read_csv('Node_data_8_buildings.csv', sep=',')
     node_data = node_data.set_index('Node')
 
-    pipe_data = pd.read_csv('Pipe_data.csv', sep=',')
-    pipe_data = pipe_data.replace(to_replace='i', value='Destest_Supply')   # rename node 'i' to 'Destest_Supply'
+    pipe_data = pd.read_csv('Pipe_data_8_buildings.csv', sep=',')
+    pipe_data = pipe_data.replace(to_replace='i', value='Destest_Supply')  # rename node 'i' to 'Destest_Supply'
 
     simple_district = ug.UESGraph()
     simple_district.add_building(name="Destest_Supply", position=Point(44.0, -12.0), is_supply_heating=True)
@@ -40,38 +51,39 @@ def main():
                 position=Point(values['X-Position [m]'], values['Y-Position [m]']),
                 is_supply_heating=False)
 
-    # Help dictionary for drawing the connections / edges 16 buildings
-    # total of 24 connections/pipes (each network nodes is connected to 3 other nodes)
+    # Help dictionary for drawing the connections / edges 8 buildings
     connection_dict_heating_nodes = {
-        "a": ["b", "SimpleDistrict_2", "SimpleDistrict_3"],
-        "b": ["c", "SimpleDistrict_5", "SimpleDistrict_6"],
         "c": ["d", "SimpleDistrict_10", "SimpleDistrict_11"],
         "g": ["h", "SimpleDistrict_9", "SimpleDistrict_12"],
         "d": ["Destest_Supply", "SimpleDistrict_16", "SimpleDistrict_15"],
-        "e": ["f", "SimpleDistrict_1", "SimpleDistrict_4"],
-        "f": ["g", "SimpleDistrict_8", "SimpleDistrict_7"],
         "h": ["Destest_Supply", "SimpleDistrict_14", "SimpleDistrict_13"],
     }
 
     # Adding the connections to the uesgraph object as edges
     for key, values in connection_dict_heating_nodes.items():
         for value in values:
-            simple_district.add_edge(simple_district.nodes_by_name[key], simple_district.nodes_by_name[value])
+            simple_district.add_edge(
+                simple_district.nodes_by_name[key],
+                simple_district.nodes_by_name[value])
 
     # Add Diameter and Length information to the edges from pipe_data.csv
     for index, row in pipe_data.iterrows():
         simple_district.edges[
             simple_district.nodes_by_name[row['Beginning Node']],
-            simple_district.nodes_by_name[row['Ending Node']]]['diameter'] = row['Inner Diameter [m]']
+            simple_district.nodes_by_name[row['Ending Node']]][
+            'diameter'] = row['Inner Diameter [m]']
         simple_district.edges[
             simple_district.nodes_by_name[row['Beginning Node']],
-            simple_district.nodes_by_name[row['Ending Node']]]['length'] = row['Length [m]']
+            simple_district.nodes_by_name[row['Ending Node']]][
+            'length'] = row['Length [m]']
         simple_district.edges[
             simple_district.nodes_by_name[row['Beginning Node']],
-            simple_district.nodes_by_name[row['Ending Node']]]['dIns'] = row['Insulation Thickness [m]']
+            simple_district.nodes_by_name[row['Ending Node']]][
+            'dIns'] = row['Insulation Thickness [m]']
         simple_district.edges[
             simple_district.nodes_by_name[row['Beginning Node']],
-            simple_district.nodes_by_name[row['Ending Node']]]['kIns'] = row['U-value [W/mK]']
+            simple_district.nodes_by_name[row['Ending Node']]][
+            'kIns'] = row['U-value [W/mK]']
 
     # write demand data to graphs building nodes. all Simple_Districts have the same demand at each time step
     # demands differ for every time step
@@ -85,29 +97,26 @@ def main():
     demand = demand_data["SimpleDistrict_1"].values  # only demand for one District is taken (as they're all the same)
     demand = [round(x, 1) for x in demand]  # this demand is rounded to 1 digit for better readability
 
-    m_flo_bypass = 0.5  # set as variable for dynamic model naming
     # demand is written to every Simple district as
     for bldg in simple_district.nodelist_building:
-        simple_district.nodes[bldg]['dT_design'] = 20  # part of .prepare_graph function?
+        simple_district.nodes[bldg]['dT_design'] = dt_des  # part of .prepare_graph function?
         simple_district.nodes[bldg]['m_flo_bypass'] = m_flo_bypass  # not (yet) part of .prepare_graph function!
         if not simple_district.nodes[bldg]['is_supply_heating']:
             simple_district.nodes[bldg]['input_heat'] = demand
             simple_district.nodes[bldg]['max_demand_heating'] = max(demand)
         else:
             # do i need this setting? or is it overwritten anyways by the prepare graph function?
-            simple_district.nodes[bldg]['T_supply'] = [273.15 + 60]
-            simple_district.nodes[bldg]['p_supply'] = [3.4e5]
+            simple_district.nodes[bldg]['T_supply'] = [t_sup]
+            simple_district.nodes[bldg]['p_supply'] = [p_sup]
 
     # write general simulation data to graph, doesnt that happen with the .prepare_model function?
     simple_district.graph['network_type'] = 'heating'
-    simple_district.graph['T_nominal'] = 273.15 + 50   # needed?
-    simple_district.graph['p_nominal'] = 3e5   # needed?
-    simple_district.graph['T_ground'] = [285.15] * int(52560)   # sets ground temp for every 10min time step.
+    simple_district.graph['T_nominal'] = t_nom   # needed?
+    simple_district.graph['p_nominal'] = p_nom   # needed?
+    simple_district.graph['T_ground'] = [t_grnd] * int(52560)   # sets ground temp for every 10min time step.
 
     for edge in simple_district.edges():
-        simple_district.edges[edge[0], edge[1]]['name'] = \
-            str(edge[0]) + 'to' + str(edge[1])
-        simple_district.edges[edge[0], edge[1]]['m_flow_nominal'] = 1   # part of the prepare graph function
+        simple_district.edges[edge[0], edge[1]]['name'] = str(edge[0]) + 'to' + str(edge[1])
         simple_district.edges[edge[0], edge[1]]['fac'] = 1.0
         simple_district.edges[edge[0], edge[1]]['roughness'] = 2.5e-5  # Ref
 
@@ -125,48 +134,29 @@ def main():
     # Plotting / Visualization with pipe diameters scaling
     vis = ug.Visuals(simple_district)
     vis.show_network(
-        save_as="uesgraph_destest_16_selfsized_jonas.png",
-        show_diameters=True,
-        scaling_factor=15,
-        labels="name",
-        label_size=10,
-        scaling_factor_diameter=100)
+        save_as="uesgraph_destest_8_selfsized_jonas.png", show_diameters=True, scaling_factor=15,
+        labels="name", label_size=10, scaling_factor_diameter=100)
 
-    # .prepare_graph() variables, for dynamic model naming
-    t_sup = [273.15 + 86]   # has to be a list object to work properly with the .prepare_graph function
-    t_ret = 273.15 + 56  # function of T_supply and dT_design?
-    dt_des = 30
-    p_sup = 13e5
-    p_ret = 2e5
-    m_flo_nom = 1
-
-    # .create_model() variables, for dynamic model naming
-    t_nom = 273.15 + 60  # equals T_Ambient in Dymola? Start value for every pipe?
-    p_nom = 3e5
-
-    save_name = "Destest_Jonas__T_{:.0f}_{:.0f}_{:.0f}__dT_{}__p_{:.0f}_{:.0f}_{:.0f}__mNom_{:.0f}__mByGram_{:.0f}"\
-        .format(t_sup[0] - 273.15, t_nom - 273.15, t_ret - 273.15, dt_des,
+    save_name = "Destest_8_Jonas__T_{:.0f}_{:.0f}_{:.0f}__dT_{}__p_{:.0f}_{:.0f}_{:.0f}__mNom_{:.0f}__mByGram_{:.0f}"\
+        .format(t_sup - 273.15, t_nom - 273.15, t_ret - 273.15, dt_des,
                 p_sup / 1e5, p_nom / 1e5, p_ret / 1e5, m_flo_nom, m_flo_bypass * 1e3)
-    # {} are placeholders, :.0f rounds to 0 digits. Pressure is divided to show Unit in [bar], Temperature in [°C]
-    # often there are problems with Dymola when model names have different Symbols than Letters, Numbers and Underscores
 
-    # Copied and modified from e11
     simple_district = sysmod_utils.prepare_graph(
         graph=simple_district,
-        T_supply=t_sup,
+        T_supply=[t_sup] * int(52560),
         p_supply=p_sup,
         T_return=t_ret,  # function aus t_supply ind dT_design? -> redundant?
         p_return=p_ret,
         dT_design=dt_des,   # inside the supply station?
         m_flow_nominal=m_flo_nom,
-        dp_nominal=None,
-        dT_building=None,   # inside the buildings/demand stations?
-        T_supply_building=None,
-        cop_nominal=None,
-        T_con_nominal=None,
-        T_eva_nominal=None,
-        dTEva_nominal=None,
-        dTCon_nominal=None
+        # dp_nominal=None,
+        # dT_building=None,   # inside the buildings/demand stations?
+        # T_supply_building=None,
+        # cop_nominal=None,
+        # T_con_nominal=None,
+        # T_eva_nominal=None,
+        # dTEva_nominal=None,
+        # dTCon_nominal=None
     )
 
     # To generate a generic Modelica model the create_model function is used. There are 21 parameters available.
@@ -185,7 +175,7 @@ def main():
         model_ground="t_ground_table",
         T_nominal=t_nom,
         p_nominal=p_nom,
-        t_ground_prescribed=[273.15 + 10] * int(52560)
+        t_ground_prescribed=[t_grnd] * int(52560)
     )
 
 
