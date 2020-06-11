@@ -10,8 +10,6 @@ import os
 import numpy as np
 import copy
 from uesgraphs.uesgraph import UESGraph
-import matplotlib.pyplot as plt
-import matplotlib.pyplot as plt
 import matplotlib
 
 from uesgraphs.visuals import Visuals
@@ -84,7 +82,7 @@ def analyse_pumping_power_supply_decentral(res, key, dir_output):
 
     # ax1 = res_h["networkModel.supplySupply_0.fan.P"].plot()
 
-    name = key.split("\\")[-1][:-4]
+    name = key.split("/")[-1][:-4]
 
     fig1, ax1 = plt.subplots()
 
@@ -164,7 +162,7 @@ def analyse_pumping_power_supply_central(res, key, dir_output):
 
     # ax1 = res_h["networkModel.supplySupply_0.fan.P"].plot()
 
-    name = key.split("\\")[-1][:-4]
+    name = key.split("/")[-1][:-4]
 
     fig1, ax1 = plt.subplots()
 
@@ -339,7 +337,6 @@ def import_simulation_results_modelicares(res_path, signals):
     return res_all
 
 
-
 def read_trajectory_names_filtered(res_path):
     """
     Imports results from network simulation from a .mat file
@@ -354,7 +351,7 @@ def read_trajectory_names_filtered(res_path):
 
     sim = SimRes(fname=res_path)
 
-    dym_res = sim.names()
+    dym_res = sim.get_trajectories()
 
     # dym_res = dymola.readTrajectoryNames(fileName=res_path)
 
