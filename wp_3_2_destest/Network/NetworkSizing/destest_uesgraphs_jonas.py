@@ -1,12 +1,9 @@
 # -*- coding: utf-8 -*-
 
-import datetime
 import uesgraphs as ug
 from shapely.geometry import Point
 import pandas as pd
 import os
-
-from uesgraphs.uesmodels.utilities import utilities as utils
 from uesgraphs.systemmodels import utilities as sysmod_utils
 
 
@@ -17,25 +14,29 @@ def main():
     graph. Creates a Modelica Model of the Graph.
     """
 
+    # paths
+    # dir_sciebo_mac = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data"
+    dir_sciebo_win = "D:/mma-jgr/sciebo-folder/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data"
+
     # parameters
-    t_sup = 273.15 + 83  # -> TIn in Modelica
-    t_ret = 273.15 + 63  # function of T_supply and dT_design?
-    dt_des = 20
-    t_nom = 273.15 + 83  # equals T_Ambient in Dymola? Start value for every pipe?
+    t_sup = 273.15 + 30  # -> TIn in Modelica
+    t_ret = 273.15 + 20  # function of T_supply and dT_design?
+    dt_des = t_sup - t_ret
+    t_nom = 273.15 + 25  # equals T_Ambient in Dymola? Start value for every pipe?
     t_grnd = 273.15 + 10
 
     p_sup = 6e5  # dP_In -> Druckdifferenzregelung nochmal genau anschauen!
     p_ret = 2e5
-    p_nom = 3e5
+    p_nom = 5e5
 
     # m_flo_nom = 1  # andere werte testen, evtl mit Funktion berechnen
-    m_flo_bypass = 0.000005  # set as variable for dynamic model naming
+    m_flo_bypass = 0.0005  # set as variable for dynamic model naming
 
     # parameters for heatpump models
-    t_con_nom = 273.15 + 40
-    t_eva_nom = 273.15 + 10
+    t_con_nom = 273.15 + 35
+    t_eva_nom = 273.15 + 10  # should be around ground temp?
     dt_bldng = 10
-    t_supply_bldng = 273.15 + 40
+    t_supply_bldng = 273.15 + 40  # should be higher than T Condensator?
 
     node_data = pd.read_csv('Node data.csv', sep=',')
     node_data = node_data.set_index('Node')
@@ -134,10 +135,6 @@ def main():
 
     print("####")
 
-    dir_model = os.path.join(os.path.dirname(__file__), 'model')
-    if not os.path.exists(dir_model):
-        os.mkdir(dir_model)
-
     for edge in simple_district.edges:
         print("diameter: " + str(simple_district.edges[edge[0], edge[1]]["diameter"]))  # why print this?
 
@@ -153,9 +150,27 @@ def main():
         label_size=10,
         scaling_factor_diameter=100)
 
-    save_name = "Destest_Jonas__T_{:.0f}_{:.0f}_{:.0f}__dT_{}__p_{:.0f}_{:.0f}_{:.0f}__mBy_{:.0f}" \
+    # dir_model = os.path.join(os.path.dirname(__file__), 'model')
+    dir_models_sciebo = os.path.join(dir_sciebo_win, 'models')
+    if not os.path.exists(dir_models_sciebo):
+        os.mkdir(dir_models_sciebo)
+
+    save_name = "Destest_Jonas__T_{:.0f}_{:.0f}_{:.0f}__dT_{:.0f}__p_{:.0f}_{:.0f}_{:.0f}__mBy_{:.0f}" \
         .format(t_sup - 273.15, t_nom - 273.15, t_ret - 273.15, dt_des,
                 p_sup / 1e5, p_nom / 1e5, p_ret / 1e5, m_flo_bypass * 1e6)
+
+    dir_model = os.path.join(dir_models_sciebo, save_name)
+    counter = 1
+    while os.path.exists(dir_model):
+        counter += 1
+        if counter < 3:
+            save_name += "__V_" + str(counter)
+            dir_model = os.path.join(dir_models_sciebo, save_name)
+        else:
+            save_name = save_name[:-5]
+            save_name += "__V_" + str(counter)
+            dir_model = os.path.join(dir_models_sciebo, save_name)
+
     # {} are placeholders, :.0f rounds to 0 digits. Pressure is divided to show Unit in [bar], Temperature in [°C]
     # often there are problems with Dymola when model names have different Symbols than Letters, Numbers and Underscores
 
@@ -168,29 +183,32 @@ def main():
         p_return=p_ret,
         dT_design=dt_des,  # inside the supply station?
         # m_flow_nominal=m_flo_nom, # can also be set for each pipe by the .estimate_m_flow_nominal method
-        # dp_nominal=None,
-        # dT_building=dt_bldng,   # inside the buildings/demand stations? necessary for heatpump demand models
-        # T_supply_building=t_supply_bldng,  # necessary for heatpump demand models
-        # cop_nominal=4.5,
-        # T_con_nominal=t_con_nom,
-        # T_eva_nominal=t_eva_nom,
+        # dp_nominal=50000,
+        dT_building=dt_bldng,  # inside the buildings/demand stations? necessary for heatpump demand models
+        T_supply_building=t_supply_bldng,  # necessary for heatpump demand models
+        cop_nominal=5.5,
+        T_con_nominal=t_con_nom,
+        T_eva_nominal=t_eva_nom,
         # dTEva_nominal=None,
         # dTCon_nominal=None
     )
 
+    aixlib_dhc = "AixLib.Fluid.DistrictHeatingCooling."
     # To generate a generic Modelica model the create_model function is used. There are 21 parameters available.
     sysmod_utils.create_model(
         name=save_name,
-        save_at=dir_model,
+        save_at=dir_models_sciebo,
         graph=simple_district,
         stop_time=365 * 24 * 3600,
         timestep=600,
-        model_supply='AixLib.Fluid.DistrictHeatingCooling.Supplies.OpenLoop.SourceIdeal',  # druckbasiert
+        model_supply=aixlib_dhc + 'Supplies.OpenLoop.SourceIdeal',  # druckbasiert
         # model_supply='AixLib.Fluid.DistrictHeatingCooling.Supplies.OpenLoop.SourceIdealPump',
         # model_demand='AixLib.Fluid.DistrictHeatingCooling.Demands.OpenLoop.VarTSupplyDpFixedTempDifferenceBypass',
         # model_demand="AixLib.Fluid.DistrictHeatingCooling.Demands.OpenLoop.HeatPumpCarnot",
-        model_demand='AixLib.Fluid.DistrictHeatingCooling.Demands.OpenLoop.VarTSupplyDp',  # aus E11
-        # model_pipe="AixLib.Fluid.FixedResistances.PlugFlowPipeStatic",    # andere modelle in DHC Aixlib, oder PlugFlowPipeStatic
+        # model_demand='AixLib.Fluid.DistrictHeatingCooling.Demands.OpenLoop.VarTSupplyDp',  # aus E11
+        # model_demand=aixlib_dhc + "Demands.ClosedLoop.PumpControlledHeatPumpFixDeltaT",  # Erdeis
+        model_demand=aixlib_dhc + "Demands.ClosedLoop.ValveControlledHeatPumpFixDeltaT",
+        # model_pipe="AixLib.Fluid.FixedResistances.PlugFlowPipe",  # andere modelle in DHC Aixlib, PlugFlowPipeStatic
         model_pipe="AixLib.Fluid.DistrictHeatingCooling.Pipes.StaticPipe",
         model_medium="AixLib.Media.Specialized.Water.ConstantProperties_pT",
         model_ground="t_ground_table",
