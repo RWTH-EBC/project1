@@ -1,43 +1,113 @@
 # -*- coding: utf-8 -*-
-
 import uesgraphs as ug
 from shapely.geometry import Point
 import pandas as pd
+import numpy as np
 import os
+import platform
+from datetime import datetime
 from uesgraphs.systemmodels import utilities as sysmod_utils
 
 
 def main():
-    """
-    Defines a building node dictionary and adds it to the graph.
-    Adds network nodes to the graph and creates a district heating network
-    graph. Creates a Modelica Model of the Graph.
-    """
 
     # paths
-    # dir_sciebo_mac = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data"
-    dir_sciebo_win = "D:/mma-jgr/sciebo-folder/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data"
+    if platform.system() == 'Darwin':
+        dir_sciebo = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data"
+    elif platform.system() == 'Windows':
+        dir_sciebo = "D:/mma-jgr/sciebo-folder/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data"
+    else:
+        raise Exception("Unknown operating system")
 
     # parameters
-    t_sup = 273.15 + 30  # -> TIn in Modelica
-    t_ret = 273.15 + 20  # function of T_supply and dT_design?
-    dt_des = t_sup - t_ret
-    t_nom = 273.15 + 25  # equals T_Ambient in Dymola? Start value for every pipe?
-    t_grnd = 273.15 + 10
+    aixlib_dhc = "AixLib.Fluid.DistrictHeatingCooling."
+    params_dict = {
+        't_supply': 273.15 + 30,    # -> TIn in Modelica
+        't_return': 273.15 + 20,    # function of T_supply and dT_design?
+        'dT_design': 10,
+        't_nominal': 273.15 + 25,   # equals T_Ambient in Dymola? Start value for every pipe?
+        't_ground': 273.15 + 10,
+        'p_supply': 6e5,    # dP_In -> Druckdifferenzregelung nochmal genau anschauen!
+        'p_nominal': 5e5,
+        'p_return': 2e5,
+        'm_flo_bypass': 0.0005,
+        't_con_nominal': 273.15 + 35,
+        't_eva_nominal': 273.15 + 10,   # should be around ground temp?
+        'dT_building': 10,
+        'cop_nominal': 5.5,
+        't_supply_building': 273.15 + 40,   # should be higher than T Condensator?
+        'model_supply': aixlib_dhc + 'Supplies.OpenLoop.SourceIdeal',
+        # 'model_supply': aixlib_dhc + 'Supplies.OpenLoop.SourceIdealPump',
+        # 'model_demand': aixlib_dhc + 'Demands.OpenLoop.VarTSupplyDpFixedTempDifferenceBypass',
+        # 'model_demand': aixlib_dhc + 'Demands.OpenLoop.HeatPumpCarnot',
+        # 'model_demand': aixlib_dhc + 'Demands.OpenLoop.VarTSupplyDp',  # aus E11
+        # 'model_demand': aixlib_dhc + "Demands.ClosedLoop.PumpControlledHeatPumpFixDeltaT",  # Erdeis
+        'model_demand': aixlib_dhc + "Demands.ClosedLoop.ValveControlledHeatPumpFixDeltaT",
+        # 'model_pipe': "AixLib.Fluid.FixedResistances.PlugFlowPipe",
+        'model_pipe': aixlib_dhc + 'Pipes.StaticPipe',
+        'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
+        'model_ground': "t_ground_table",
+    }
 
-    p_sup = 6e5  # dP_In -> Druckdifferenzregelung nochmal genau anschauen!
-    p_ret = 2e5
-    p_nom = 5e5
+    parameter_study(params_dict, dir_sciebo,
+                    p1='cop_nominal', p1_values=np.arange(1.5, 8.5, 0.5),
+                    p2='p_supply', p2_values=np.arange(5.0e5, 7.2e5, 0.2e5)
+                    )
 
-    # m_flo_nom = 1  # andere werte testen, evtl mit Funktion berechnen
-    m_flo_bypass = 0.0005  # set as variable for dynamic model naming
 
-    # parameters for heatpump models
-    t_con_nom = 273.15 + 35
-    t_eva_nom = 273.15 + 10  # should be around ground temp?
-    dt_bldng = 10
-    t_supply_bldng = 273.15 + 40  # should be higher than T Condensator?
+def parameter_study(params_dict, dir_sciebo, p1='', p1_values=np.arange(1, 1), p2='', p2_values=np.arange(1, 1)):
+    """
+    Function that takes the parameter dictionary with its default values and creates a number of alternative
+    dictionaries, depending on how many parameters and corresponding values are given. Each alternative dictionary is
+    then passed to the 'generate_model' function. The number of generated dictionaries, and thus the number of
+    simulations si returned.
+    :param params_dict: dictionary: stores the simulation parameters and their initial values
+    :param dir_sciebo:  string:     stores the path of the sciebo folder
+    :param p1:          string:     name of parameter 1
+    :param p1_values:   np array:   list of values for parameter 1
+    :param p2:          string:     name of parameter 2
+    :param p2_values:   np array:   list of values for parameter 2
+    :return: runs:      integer:    number of simulations created
+    """
+    if p1 is '' and p2 is '':
+        generate_model(params_dict=params_dict, dir_sciebo=dir_sciebo)
+        runs = 1
+    elif p1 is '':
+        runs = len(p2_values)
+        print("{} values for the {} parameter are given: {}".format(runs, p2, p2_values))
+        for p2_value in p2_values:
+            params_dict[p2] = p2_value
+            generate_model(params_dict=params_dict, dir_sciebo=dir_sciebo)
+    elif p2 is '':
+        runs = len(p1_values)
+        print("{} values for the {} parameter are given: {}".format(runs, p1, p1_values))
+        for p1_value in p1_values:
+            params_dict[p1] = p1_value
+            generate_model(params_dict=params_dict, dir_sciebo=dir_sciebo)
+    else:
+        runs = len(p1_values) * len(p2_values)
+        print("Two parameters are given: \n {} values for the {} parameter: {} \n"
+              "{} values for the {} parameter: {} \n This results in {} combinations of the two parameters"
+              .format(len(p1_values), p1, p1_values, len(p2_values), p2, p2_values, runs))
+        for p1_value in p1_values:
+            params_dict[p1] = p1_value
+            for var2_value in p2_values:
+                params_dict[p2] = var2_value
+                generate_model(params_dict=params_dict, dir_sciebo=dir_sciebo)
 
+    print("{} Simulation setups have been created and saved at {} \n"
+          "Those setups are now ready to be simulated with Dymola".format(runs, dir_sciebo))
+    return runs
+
+
+def generate_model(params_dict, dir_sciebo):
+    """
+    "Defines a building node dictionary and adds it to the graph. Adds network nodes to the graph and creates
+    a district heating network graph. Creates a Modelica Model of the Graph."
+    :param params_dict: dictionary:    simulation parameters and their initial values
+    :param dir_sciebo:  string:        path of the sciebo folder
+    :return:
+    """
     node_data = pd.read_csv('Node data.csv', sep=',')
     node_data = node_data.set_index('Node')
 
@@ -108,21 +178,21 @@ def main():
 
     # demand is written to every Simple district as
     for bldg in simple_district.nodelist_building:
-        simple_district.nodes[bldg]['dT_design'] = dt_des  # part of .prepare_graph function?
-        simple_district.nodes[bldg]['m_flo_bypass'] = m_flo_bypass  # not (yet) part of .prepare_graph function!
+        simple_district.nodes[bldg]['dT_design'] = params_dict['dT_design']  # part of .prepare_graph function?
+        simple_district.nodes[bldg]['m_flo_bypass'] = params_dict['m_flo_bypass']  # not (yet) part of .prepare_graph function!
         if not simple_district.nodes[bldg]['is_supply_heating']:
             simple_district.nodes[bldg]['input_heat'] = demand
             simple_district.nodes[bldg]['max_demand_heating'] = max(demand)
         else:
             # do i need this setting? or is it overwritten anyways by the prepare graph function?
-            simple_district.nodes[bldg]['T_supply'] = [t_sup] * int(52560)
-            simple_district.nodes[bldg]['p_supply'] = [p_sup] * int(52560)
+            simple_district.nodes[bldg]['T_supply'] = [params_dict['t_supply']] * int(52560)
+            simple_district.nodes[bldg]['p_supply'] = [params_dict['p_supply']] * int(52560)
 
     # write general simulation data to graph, doesnt that happen with the .prepare_model function?
     simple_district.graph['network_type'] = 'heating'
-    simple_district.graph['T_nominal'] = t_nom  # needed?
-    simple_district.graph['p_nominal'] = p_nom  # needed?
-    simple_district.graph['T_ground'] = [t_grnd] * int(52560)  # sets ground temp for every 10min time step.
+    simple_district.graph['T_nominal'] = params_dict['t_nominal']  # needed?
+    simple_district.graph['p_nominal'] = params_dict['p_nominal']  # needed?
+    simple_district.graph['T_ground'] = [params_dict['t_ground']] * int(52560)  # ground temp for every 10min time step
 
     for edge in simple_district.edges():
         simple_district.edges[edge[0], edge[1]]['name'] = str(edge[0]) + 'to' + str(edge[1])
@@ -131,14 +201,12 @@ def main():
         simple_district.edges[edge[0], edge[1]]['roughness'] = 2.5e-5  # Ref
 
     # write m_flow_nominal to the graphs edges with uesgraph function
-    sysmod_utils.estimate_m_flow_nominal(graph=simple_district, dT_design=dt_des, network_type='heating')
+    sysmod_utils.estimate_m_flow_nominal(graph=simple_district, dT_design=params_dict['dT_design'], network_type='heating')
 
-    print("####")
-
-    for edge in simple_district.edges:
-        print("diameter: " + str(simple_district.edges[edge[0], edge[1]]["diameter"]))  # why print this?
-
-    print("####")
+    # print("####")
+    # for edge in simple_district.edges:
+    #     print("diameter: " + str(simple_district.edges[edge[0], edge[1]]["diameter"]))  # why print this?
+    # print("####")
 
     # Plotting / Visualization with pipe diameters scaling
     vis = ug.Visuals(simple_district)
@@ -151,49 +219,51 @@ def main():
         scaling_factor_diameter=100)
 
     # dir_model = os.path.join(os.path.dirname(__file__), 'model')
-    dir_models_sciebo = os.path.join(dir_sciebo_win, 'models')
+    dir_models_sciebo = os.path.join(dir_sciebo, 'models')
     if not os.path.exists(dir_models_sciebo):
         os.mkdir(dir_models_sciebo)
 
-    save_name = "Destest_Jonas__T_{:.0f}_{:.0f}_{:.0f}__dT_{:.0f}__p_{:.0f}_{:.0f}_{:.0f}__mBy_{:.0f}" \
-        .format(t_sup - 273.15, t_nom - 273.15, t_ret - 273.15, dt_des,
-                p_sup / 1e5, p_nom / 1e5, p_ret / 1e5, m_flo_bypass * 1e6)
-
+    save_name = "Destest_Jonas__T_{:.0f}_{:.0f}_{:.0f}__dT_{:.0f}__p_{:.0f}_{:.0f}_{:.0f}__dTbldng_{:.0f}" \
+                "__Tsupbldng_{:.0f}__CoP_{:.0f}__Tcon_{:.0f}__Teva_{:.0f}__mBy_{:.0f}" \
+        .format(params_dict['t_supply'] - 273.15, params_dict['t_nominal'] - 273.15, params_dict['t_return'] - 273.15,
+                params_dict['dT_design'], params_dict['p_supply'] / 1e3, params_dict['p_nominal'] / 1e3,
+                params_dict['p_return'] / 1e3, params_dict['dT_building'], params_dict['t_supply_building'] - 273.15,
+                params_dict['cop_nominal']*10, params_dict['t_con_nominal']-273.15, params_dict['t_eva_nominal']-273.15,
+                params_dict['m_flo_bypass'] * 1e6)
+    # {} are placeholders, :.0f rounds to 0 digits. Pressure is divided to show Unit in [kPa], Temperature in [°C]
+    # often there are problems with Dymola when model names have different Symbols than Letters, Numbers and Underscores
+    # datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
     dir_model = os.path.join(dir_models_sciebo, save_name)
     counter = 1
     while os.path.exists(dir_model):
         counter += 1
         if counter < 3:
-            save_name += "__V_" + str(counter)
+            save_name += "__V" + str(counter)
             dir_model = os.path.join(dir_models_sciebo, save_name)
         else:
-            save_name = save_name[:-5]
-            save_name += "__V_" + str(counter)
+            save_name = save_name[:-4]
+            save_name += "__V" + str(counter)
             dir_model = os.path.join(dir_models_sciebo, save_name)
-
-    # {} are placeholders, :.0f rounds to 0 digits. Pressure is divided to show Unit in [bar], Temperature in [°C]
-    # often there are problems with Dymola when model names have different Symbols than Letters, Numbers and Underscores
 
     # Copied and modified from e11
     simple_district = sysmod_utils.prepare_graph(
         graph=simple_district,
-        T_supply=[t_sup] * int(52560),
-        p_supply=p_sup,
-        T_return=t_ret,  # function aus t_supply ind dT_design? -> redundant?
-        p_return=p_ret,
-        dT_design=dt_des,  # inside the supply station?
+        T_supply=[params_dict['t_supply']] * int(52560),
+        p_supply=params_dict['p_supply'],
+        T_return=params_dict['t_return'],  # function aus t_supply ind dT_design? -> redundant?
+        p_return=params_dict['p_return'],
+        dT_design=params_dict['dT_design'],  # inside the supply station?
         # m_flow_nominal=m_flo_nom, # can also be set for each pipe by the .estimate_m_flow_nominal method
         # dp_nominal=50000,
-        dT_building=dt_bldng,  # inside the buildings/demand stations? necessary for heatpump demand models
-        T_supply_building=t_supply_bldng,  # necessary for heatpump demand models
-        cop_nominal=5.5,
-        T_con_nominal=t_con_nom,
-        T_eva_nominal=t_eva_nom,
+        dT_building=params_dict['dT_building'],  # inside the buildings? necessary for heatpump demand models
+        T_supply_building=params_dict['t_supply_building'],  # necessary for heatpump demand models
+        cop_nominal=params_dict['cop_nominal'],
+        T_con_nominal=params_dict['t_con_nominal'],
+        T_eva_nominal=params_dict['t_eva_nominal'],
         # dTEva_nominal=None,
         # dTCon_nominal=None
     )
 
-    aixlib_dhc = "AixLib.Fluid.DistrictHeatingCooling."
     # To generate a generic Modelica model the create_model function is used. There are 21 parameters available.
     sysmod_utils.create_model(
         name=save_name,
@@ -201,20 +271,14 @@ def main():
         graph=simple_district,
         stop_time=365 * 24 * 3600,
         timestep=600,
-        model_supply=aixlib_dhc + 'Supplies.OpenLoop.SourceIdeal',  # druckbasiert
-        # model_supply=aixlib_dhc + 'Supplies.OpenLoop.SourceIdealPump',
-        # model_demand=aixlib_dhc + 'Demands.OpenLoop.VarTSupplyDpFixedTempDifferenceBypass',
-        # model_demand=aixlib_dhc + 'Demands.OpenLoop.HeatPumpCarnot',
-        # model_demand=aixlib_dhc + 'Demands.OpenLoop.VarTSupplyDp',  # aus E11
-        # model_demand=aixlib_dhc + "Demands.ClosedLoop.PumpControlledHeatPumpFixDeltaT",  # Erdeis
-        model_demand=aixlib_dhc + "Demands.ClosedLoop.ValveControlledHeatPumpFixDeltaT",
-        # model_pipe="AixLib.Fluid.FixedResistances.PlugFlowPipe",  # andere modelle in DHC Aixlib, PlugFlowPipeStatic
-        model_pipe=aixlib_dhc + 'Pipes.StaticPipe',
-        model_medium="AixLib.Media.Specialized.Water.ConstantProperties_pT",
-        model_ground="t_ground_table",
-        T_nominal=t_nom,
-        p_nominal=p_nom,
-        t_ground_prescribed=[t_grnd] * int(52560)
+        model_supply=params_dict['model_supply'],
+        model_demand=params_dict['model_demand'],
+        model_pipe=params_dict['model_pipe'],
+        model_medium=params_dict['model_medium'],
+        model_ground=params_dict['model_ground'],
+        T_nominal=params_dict['t_nominal'],
+        p_nominal=params_dict['p_nominal'],
+        t_ground_prescribed=[params_dict['t_ground']] * int(52560)
     )
 
 
