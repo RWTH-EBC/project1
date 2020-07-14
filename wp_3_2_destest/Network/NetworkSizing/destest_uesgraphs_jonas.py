@@ -7,6 +7,7 @@ import os
 import platform
 from datetime import datetime
 from uesgraphs.systemmodels import utilities as sysmod_utils
+import csv
 
 
 def main():
@@ -22,8 +23,9 @@ def main():
     # parameters
     aixlib_dhc = "AixLib.Fluid.DistrictHeatingCooling."
     params_dict = {
-        't_supply': 273.15 + 30,    # -> TIn in Modelica
-        't_return': 273.15 + 20,    # function of T_supply and dT_design?
+        # 'variable': 'value',      # eventually needed for csv generation? pandas takes first entry as index
+        't_supply': 273.15 + 32,    # -> TIn in Modelica
+        't_return': 273.15 + 22,    # function of T_supply and dT_design? -> redundant?
         'dT_design': 10,
         't_nominal': 273.15 + 25,   # equals T_Ambient in Dymola? Start value for every pipe?
         't_ground': 273.15 + 10,
@@ -33,9 +35,9 @@ def main():
         'm_flo_bypass': 0.0005,
         't_con_nominal': 273.15 + 35,
         't_eva_nominal': 273.15 + 10,   # should be around ground temp?
-        'dT_building': 10,
+        'dT_building': 10,  # inside the buildings? necessary for heatpump demand models
         'cop_nominal': 5.5,
-        't_supply_building': 273.15 + 40,   # should be higher than T Condensator?
+        't_supply_building': 273.15 + 40,   # should be higher than T condensator? necessary for heatpump demand models
         'model_supply': aixlib_dhc + 'Supplies.OpenLoop.SourceIdeal',
         # 'model_supply': aixlib_dhc + 'Supplies.OpenLoop.SourceIdealPump',
         # 'model_demand': aixlib_dhc + 'Demands.OpenLoop.VarTSupplyDpFixedTempDifferenceBypass',
@@ -50,14 +52,14 @@ def main():
     }
 
     parameter_study(params_dict, dir_sciebo,
-                    p1='cop_nominal', p1_values=np.arange(1.5, 8.5, 0.5),
-                    p2='p_supply', p2_values=np.arange(5.0e5, 7.2e5, 0.2e5)
+                    p1='cop_nominal', p1_values=np.arange(4.0, 5.5, 1.0),
+                    # p2='p_supply', p2_values=np.arange(5.0e5, 7.2e5, 0.2e5)
                     )
 
 
 def parameter_study(params_dict, dir_sciebo, p1='', p1_values=np.arange(1, 1), p2='', p2_values=np.arange(1, 1)):
     """
-    Function that takes the parameter dictionary with its default values and creates a number of alternative
+    Function that takes the params_dict with its default values and creates a number of alternative
     dictionaries, depending on how many parameters and corresponding values are given. Each alternative dictionary is
     then passed to the 'generate_model' function. The number of generated dictionaries, and thus the number of
     simulations si returned.
@@ -100,12 +102,14 @@ def parameter_study(params_dict, dir_sciebo, p1='', p1_values=np.arange(1, 1), p
     return runs
 
 
-def generate_model(params_dict, dir_sciebo):
+def generate_model(params_dict, dir_sciebo, long_name=False, save_params_to_csv=True):
     """
     "Defines a building node dictionary and adds it to the graph. Adds network nodes to the graph and creates
-    a district heating network graph. Creates a Modelica Model of the Graph."
-    :param params_dict: dictionary:    simulation parameters and their initial values
-    :param dir_sciebo:  string:        path of the sciebo folder
+    a district heating network graph. Creates a Modelica Model of the Graph and saves it to dir_sciebo."
+    :param long_name: boolean:              defines if name of saved file is long (with info) or short (with timestamp)
+    :param params_dict: dictionary:         simulation parameters and their initial values
+    :param dir_sciebo:  string:             path of the sciebo folder
+    :param save_params_to_csv: boolean:    defines if parameter dict is saved to csv for later analysis
     :return:
     """
     node_data = pd.read_csv('Node data.csv', sep=',')
@@ -223,40 +227,46 @@ def generate_model(params_dict, dir_sciebo):
     if not os.path.exists(dir_models_sciebo):
         os.mkdir(dir_models_sciebo)
 
-    save_name = "Destest_Jonas__T_{:.0f}_{:.0f}_{:.0f}__dT_{:.0f}__p_{:.0f}_{:.0f}_{:.0f}__dTbldng_{:.0f}" \
-                "__Tsupbldng_{:.0f}__CoP_{:.0f}__Tcon_{:.0f}__Teva_{:.0f}__mBy_{:.0f}" \
-        .format(params_dict['t_supply'] - 273.15, params_dict['t_nominal'] - 273.15, params_dict['t_return'] - 273.15,
-                params_dict['dT_design'], params_dict['p_supply'] / 1e3, params_dict['p_nominal'] / 1e3,
-                params_dict['p_return'] / 1e3, params_dict['dT_building'], params_dict['t_supply_building'] - 273.15,
-                params_dict['cop_nominal']*10, params_dict['t_con_nominal']-273.15, params_dict['t_eva_nominal']-273.15,
-                params_dict['m_flo_bypass'] * 1e6)
-    # {} are placeholders, :.0f rounds to 0 digits. Pressure is divided to show Unit in [kPa], Temperature in [°C]
-    # often there are problems with Dymola when model names have different Symbols than Letters, Numbers and Underscores
-    # datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
-    dir_model = os.path.join(dir_models_sciebo, save_name)
-    counter = 1
-    while os.path.exists(dir_model):
-        counter += 1
-        if counter < 3:
-            save_name += "__V" + str(counter)
-            dir_model = os.path.join(dir_models_sciebo, save_name)
-        else:
-            save_name = save_name[:-4]
-            save_name += "__V" + str(counter)
-            dir_model = os.path.join(dir_models_sciebo, save_name)
+    if long_name:
+        save_name = "Destest_Jonas__T_{:.0f}_{:.0f}_{:.0f}__dT_{:.0f}__p_{:.0f}_{:.0f}_{:.0f}__dTbldng_{:.0f}" \
+                    "__Tsupbldng_{:.0f}__CoP_{:.0f}__Tcon_{:.0f}__Teva_{:.0f}__mBy_{:.0f}" \
+            .format(params_dict['t_supply'] - 273.15, params_dict['t_nominal'] - 273.15,
+                    params_dict['t_return'] - 273.15,
+                    params_dict['dT_design'], params_dict['p_supply'] / 1e3, params_dict['p_nominal'] / 1e3,
+                    params_dict['p_return'] / 1e3, params_dict['dT_building'],
+                    params_dict['t_supply_building'] - 273.15,
+                    params_dict['cop_nominal'] * 10, params_dict['t_con_nominal'] - 273.15,
+                    params_dict['t_eva_nominal'] - 273.15,
+                    params_dict['m_flo_bypass'] * 1e6)
+        # {} are placeholders, :.0f rounds to 0 digits. Pressure is divided to show Unit in [kPa], Temperature in [°C]
+        # often there are problems with Dymola when model names have different Symbols than Letters, Numbers and Underscores
+        dir_model = os.path.join(dir_models_sciebo, save_name)
+        counter = 1
+        while os.path.exists(dir_model):
+            counter += 1
+            if counter < 3:
+                save_name += "__V" + str(counter)
+                dir_model = os.path.join(dir_models_sciebo, save_name)
+            else:
+                save_name = save_name[:-4]
+                save_name += "__V" + str(counter)
+                dir_model = os.path.join(dir_models_sciebo, save_name)
+    else:
+        save_name = "Destest_Jonas_{}".format(datetime.now().strftime('%Y_%m_%d_%H_%M_%S'))
+        dir_model = os.path.join(dir_models_sciebo, save_name)
 
     # Copied and modified from e11
     simple_district = sysmod_utils.prepare_graph(
         graph=simple_district,
         T_supply=[params_dict['t_supply']] * int(52560),
         p_supply=params_dict['p_supply'],
-        T_return=params_dict['t_return'],  # function aus t_supply ind dT_design? -> redundant?
+        T_return=params_dict['t_return'],
         p_return=params_dict['p_return'],
         dT_design=params_dict['dT_design'],  # inside the supply station?
         # m_flow_nominal=m_flo_nom, # can also be set for each pipe by the .estimate_m_flow_nominal method
         # dp_nominal=50000,
-        dT_building=params_dict['dT_building'],  # inside the buildings? necessary for heatpump demand models
-        T_supply_building=params_dict['t_supply_building'],  # necessary for heatpump demand models
+        dT_building=params_dict['dT_building'],
+        T_supply_building=params_dict['t_supply_building'],
         cop_nominal=params_dict['cop_nominal'],
         T_con_nominal=params_dict['t_con_nominal'],
         T_eva_nominal=params_dict['t_eva_nominal'],
@@ -264,7 +274,6 @@ def generate_model(params_dict, dir_sciebo):
         # dTCon_nominal=None
     )
 
-    # To generate a generic Modelica model the create_model function is used. There are 21 parameters available.
     sysmod_utils.create_model(
         name=save_name,
         save_at=dir_models_sciebo,
@@ -280,6 +289,16 @@ def generate_model(params_dict, dir_sciebo):
         p_nominal=params_dict['p_nominal'],
         t_ground_prescribed=[params_dict['t_ground']] * int(52560)
     )
+
+    if save_params_to_csv:
+        path_to_csv = dir_model + "/" + save_name + "_overview.csv"
+
+        # w = csv.writer(open(path_to_csv, "w"))
+        # for key, val in params_dict.items():
+        #     w.writerow([key, val])
+
+        overview_df = pd.DataFrame.from_records(params_dict, index=range(1))
+        overview_df.to_csv(path_to_csv)
 
 
 if __name__ == '__main__':
