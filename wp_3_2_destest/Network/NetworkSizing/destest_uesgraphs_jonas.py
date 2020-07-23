@@ -7,7 +7,7 @@ import os
 import platform
 from datetime import datetime
 from uesgraphs.systemmodels import utilities as sysmod_utils
-import csv
+# import csv
 
 
 def main():
@@ -24,8 +24,8 @@ def main():
     aixlib_dhc = "AixLib.Fluid.DistrictHeatingCooling."
     params_dict = {
         # 'variable': 'value',      # eventually needed for csv generation? pandas takes first entry as index
-        't_supply': 273.15 + 32,    # -> TIn in Modelica
-        't_return': 273.15 + 22,    # function of T_supply and dT_design? -> redundant?
+        't_supply': 273.15 + 45,    # -> TIn in Modelica
+        't_return': 273.15 + 35,    # function of T_supply and dT_design? -> redundant?
         'dT_design': 10,
         't_nominal': 273.15 + 25,   # equals T_Ambient in Dymola? Start value for every pipe?
         't_ground': 273.15 + 10,
@@ -52,8 +52,9 @@ def main():
     }
 
     parameter_study(params_dict, dir_sciebo,
-                    p1='cop_nominal', p1_values=np.arange(4.0, 5.5, 1.0),
-                    # p2='p_supply', p2_values=np.arange(5.0e5, 7.2e5, 0.2e5)
+                    # p1='cop_nominal', p1_values=np.arange(4.0, 6.5, 1.0),
+                    p1='t_ground', p1_values=np.arange(273.15 - 20, 273.15 + 42, 10),
+                    # p2='p_supply', p2_values=np.arange(5.0e5, 6.2e5, 0.5e5)
                     )
 
 
@@ -88,8 +89,10 @@ def parameter_study(params_dict, dir_sciebo, p1='', p1_values=np.arange(1, 1), p
             generate_model(params_dict=params_dict, dir_sciebo=dir_sciebo)
     else:
         runs = len(p1_values) * len(p2_values)
-        print("Two parameters are given: \n {} values for the {} parameter: {} \n"
-              "{} values for the {} parameter: {} \n This results in {} combinations of the two parameters"
+        print("Two parameters are given: \n"
+              "     {} values for the {} parameter: {} \n"
+              "     {} values for the {} parameter: {} \n"
+              "         This results in {} combinations of the two parameters"
               .format(len(p1_values), p1, p1_values, len(p2_values), p2, p2_values, runs))
         for p1_value in p1_values:
             params_dict[p1] = p1_value
@@ -183,7 +186,7 @@ def generate_model(params_dict, dir_sciebo, long_name=False, save_params_to_csv=
     # demand is written to every Simple district as
     for bldg in simple_district.nodelist_building:
         simple_district.nodes[bldg]['dT_design'] = params_dict['dT_design']  # part of .prepare_graph function?
-        simple_district.nodes[bldg]['m_flo_bypass'] = params_dict['m_flo_bypass']  # not (yet) part of .prepare_graph function!
+        simple_district.nodes[bldg]['m_flo_bypass'] = params_dict['m_flo_bypass']  # not (yet) part of .prepare_graph!
         if not simple_district.nodes[bldg]['is_supply_heating']:
             simple_district.nodes[bldg]['input_heat'] = demand
             simple_district.nodes[bldg]['max_demand_heating'] = max(demand)
@@ -205,7 +208,8 @@ def generate_model(params_dict, dir_sciebo, long_name=False, save_params_to_csv=
         simple_district.edges[edge[0], edge[1]]['roughness'] = 2.5e-5  # Ref
 
     # write m_flow_nominal to the graphs edges with uesgraph function
-    sysmod_utils.estimate_m_flow_nominal(graph=simple_district, dT_design=params_dict['dT_design'], network_type='heating')
+    sysmod_utils.estimate_m_flow_nominal(graph=simple_district, dT_design=params_dict['dT_design'],
+                                         network_type='heating')
 
     # print("####")
     # for edge in simple_district.edges:
@@ -239,7 +243,7 @@ def generate_model(params_dict, dir_sciebo, long_name=False, save_params_to_csv=
                     params_dict['t_eva_nominal'] - 273.15,
                     params_dict['m_flo_bypass'] * 1e6)
         # {} are placeholders, :.0f rounds to 0 digits. Pressure is divided to show Unit in [kPa], Temperature in [°C]
-        # often there are problems with Dymola when model names have different Symbols than Letters, Numbers and Underscores
+        # often there're problems with Dymola when names have different Symbols than Letters, Numbers and Underscores
         dir_model = os.path.join(dir_models_sciebo, save_name)
         counter = 1
         while os.path.exists(dir_model):
@@ -252,7 +256,7 @@ def generate_model(params_dict, dir_sciebo, long_name=False, save_params_to_csv=
                 save_name += "__V" + str(counter)
                 dir_model = os.path.join(dir_models_sciebo, save_name)
     else:
-        save_name = "Destest_Jonas_{}".format(datetime.now().strftime('%Y_%m_%d_%H_%M_%S'))
+        save_name = "Destest_Jonas_{}".format(datetime.now().strftime('%Y_%m_%d_%H_%M_%S'))  # for unique naming
         dir_model = os.path.join(dir_models_sciebo, save_name)
 
     # Copied and modified from e11
@@ -292,12 +296,7 @@ def generate_model(params_dict, dir_sciebo, long_name=False, save_params_to_csv=
 
     if save_params_to_csv:
         path_to_csv = dir_model + "/" + save_name + "_overview.csv"
-
-        # w = csv.writer(open(path_to_csv, "w"))
-        # for key, val in params_dict.items():
-        #     w.writerow([key, val])
-
-        overview_df = pd.DataFrame.from_records(params_dict, index=range(1))
+        overview_df = pd.DataFrame.from_records(params_dict, index=[save_name])
         overview_df.to_csv(path_to_csv)
 
 
