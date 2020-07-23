@@ -3,71 +3,52 @@ import os
 import matplotlib.pyplot as plt
 import streamlit as st
 from modelicares import SimRes
+import fnmatch
+import platform
 
 
 def main():
     st.title("Plot Jonas Destest")
 
-    # folder management
-    res_dir = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/models"
-
-    dir_this = os.path.abspath(os.path.dirname(__file__))  # saves the path where this file is executed to a string
-    dir_src = os.path.abspath(os.path.dirname(dir_this))  # saves one higher path to a string
-    # dir_top = os.path.abspath(os.path.dirname(dir_src))
-    dir_workspace = os.path.abspath(os.path.join(dir_src, "workspace"))  # saves a new workspace path to a string
-    if not os.path.exists(dir_workspace):
-        os.makedirs(dir_workspace)
-
-    # dir_output = os.path.abspath(os.path.join(dir_workspace, "plots"))  # saves a plot path to a string
-    dir_output = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/plots"
-    if not os.path.exists(dir_output):
-        os.makedirs(dir_output)
+    # paths
+    if platform.system() == 'Darwin':
+        dir_models = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/models"
+        dir_output = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/plots"
+        master_csv = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/overview_files/master.csv"
+    elif platform.system() == 'Windows':
+        dir_models = "/mma-jgr/sciebo-folder/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/models"
+        dir_output = "/mma-jgr/sciebo-folder/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/plots"
+        master_csv = "/mma-jgr/sciebo-folder/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/overview_files/master.csv"
+    else:
+        raise Exception("Unknown operating system")
 
     # saving all variables names to a list
-    all_vars_lst = read_trajectory_names_folder(res_dir=res_dir)
+    all_vars_lst = read_trajectory_names_folder(res_dir=dir_models)
 
-    # making sublists of the list containing all variables
+    # making sublists
     sublist_m_flow = make_sublist(all_vars_lst, "senMasFlo.m_flow", "", "R")
     sublist_m_flow_return = make_sublist(all_vars_lst, "senMasFlo.m_flow", "R", "")
-    all_sup_ret_temps = make_sublist(all_vars_lst, "senT", ".T", "")
+    all_supply_return_temps = make_sublist(all_vars_lst, "senT", ".T", "")
     supply_vars = make_sublist(all_vars_lst, "networkModel.supply")
+    power_demand_heatpump = make_sublist(all_vars_lst, 'heaPum.P')
 
-    # deciding with (sub)list to convert to a dataframe
-    res_dict = mat_files_filtered_to_dict(res_dir=res_dir, var_lst=all_vars_lst,
+    # converting the mat files to dataframes
+    res_dict = mat_files_filtered_to_dict(res_dir=dir_models, var_lst=all_vars_lst,
                                           savename_append="all_sup_ret_temps.csv")
 
     # streamlit magic, show those sublists for easy inspection
-    sublist_m_flow
-    sublist_m_flow_return
-    all_sup_ret_temps
-    supply_vars
+    # sublist_m_flow
+    # sublist_m_flow_return
+    # all_supply_return_temps
+    # supply_vars
 
     # plot the data of the sublist variables
-    for key in res_dict.keys():
-        plot_from_df_looped(res_df=res_dict[key], key=key, dir_output=dir_output, var_lst=all_sup_ret_temps,
-                            ylabel="Supply and Return Temps")
-        plot_from_df_looped(res_df=res_dict[key], key=key, dir_output=dir_output, var_lst=sublist_m_flow,
-                            ylabel="Mass Flows Supply Pipes")
-
-
-def read_trajectory_names_file(res_path):
-    """
-    Takes the .mat file from the result path and saves it as a SimRes Instance. Then, all variable names that are
-    considered trajectories are saved in a list. A trajectory is considered a variable which has more than two values,
-    or the values are not equal. The 'get_trajectories' function exists only in the EBC branch of the ModelicaRes
-    package.
-    :param res_path:                str:    Path to the result file
-    :return all_trajectories_lst:   list:   names of all variables that are trajectories
-    """
-
-    print("Converting the .mat File to a SimRes instance ...")
-    sim = SimRes(fname=res_path)
-    all_trajectories_lst = sim.get_trajectories()  # all_trajectory_names is a list of variables that are trajectories.
-    print(
-        "There are " + str(len(all_trajectories_lst)) + " variables in the results file.")
-    # "+ str(all_trajectories_lst)) if you wish to print out all variable names
-
-    return all_trajectories_lst
+    plot_from_df_looped(res_dict, dir_output, plot_style=2, var_lst=all_supply_return_temps, master_csv=master_csv,
+                        y_label="Supply and Return Temps")
+    plot_from_df_looped(res_dict, dir_output, plot_style=2, var_lst=sublist_m_flow, master_csv=master_csv,
+                        y_label="Mass Flows Supply Pipes")
+    plot_from_df_looped(res_dict, dir_output, power_demand_heatpump, y_label='Power HP', plot_style=2,
+                        master_csv=master_csv)
 
 
 def read_trajectory_names_folder(res_dir, print_all_trajectories=False):
@@ -80,9 +61,8 @@ def read_trajectory_names_folder(res_dir, print_all_trajectories=False):
     :param res_dir:
     :return all_trajectories_lst:   list:   names of all variables that are trajectories
         """
-
-    res_all_st = dir_to_paths(res_dir)
-    res_path = res_all_st[0]
+    res_all_lst = find("*.mat", res_dir)
+    res_path = res_all_lst[0]
 
     print("Converting the .mat File to a SimRes instance to get the variable names ...")
     sim = SimRes(fname=res_path)
@@ -97,49 +77,43 @@ def read_trajectory_names_folder(res_dir, print_all_trajectories=False):
     return all_trajectories_lst
 
 
-@st.cache(persist=True)
-def dir_to_paths(res_dir):
+def find(pattern, path):
     """
-    takes a path of a directory and output a list of all paths to the .mat files inside the given directory.
-    :param res_dir:         String: directory where dem results at
-    :return: res_all_lst:   List:   all paths to .mat files inside res_dir
+    Finds files that match a pattern and return a list of all file paths
+    :param pattern:
+    :param path:
+    :return:
     """
+    results = []
 
-    mat_files_lst = []
-    if not os.path.isdir(res_dir):
-        error_message = "result directory {} doesn't exist! Please update path.".format(res_dir)
+    if not os.path.isdir(path):
+        error_message = "result directory {} doesn't exist! Please update path.".format(path)
         raise Exception(error_message)
 
-    for folders, sub_folders, files in os.walk(res_dir):
-        for file in files:
-            mat_files_lst.append(os.path.join(folders, file)) if file.endswith(".mat") else None
+    for root, dirs, files in os.walk(path):
+        for name in files:
+            if fnmatch.fnmatch(name, pattern):
+                results.append(os.path.join(root, name))
 
-    if not mat_files_lst:
-        error_message = "No Matfile found in result directory {}".format(res_dir)
+    if not results:
+        error_message = "No File found that contains '{pattern}' in result directory {path}"\
+            .format(pattern=pattern, path=path)
         raise Exception(error_message)
 
-    return mat_files_lst
+    return results
 
 
 def make_sublist(input_var_lst, sig1="", sig2="", anti_sig1=""):
     """
-    Makes a sublist of a list, depending on the signal word given.
+    Makes a sublist of a list, depending on the signal words given.
     This is useful for plotting a specific subset of variables.
 
-    :param input_var_lst: list
-        input list
-    :param sig1: String
-        String that should be included in the sublists results
-        Examples: pipe, demand, networkModel.supply
-    :param sig2: String
-        String that should be included in the sublists results
-        Examples: .vol.T,
-    :param anti_sig1: String
-        String that shouldn't be included in th sublists results
-        Examples: R,
-    :return sub_var_lst1: list
-        sublist
-
+    :param input_var_lst: list      input list
+    :param sig1: String             String that should be included in the sublists results
+                                    Examples: pipe, demand, networkModel.supply
+    :param sig2: String             String that should be included in the sublists results. Examples: .vol.T,
+    :param anti_sig1: String        String that shouldn't be included in th sublists results. Examples: R,
+    :return sub_var_lst1: list      sublist
     """
     sublist = [i for i in input_var_lst if sig1 in i]
     if sig2:
@@ -161,6 +135,10 @@ def matfile_to_df(res_path, var_lst):
     :param var_lst:     list:       variable names
     :return: res_df:    pandas df:  results
     """
+    if not os.path.isfile(res_path):
+        error_message = "result directory {} doesn't exist! Please update path.".format(res_path)
+        raise Exception(error_message)
+
     print("Converting the Matfile to a SimRes Instance ...")
     sim = SimRes(res_path)
     print("Converting the SimRes Instance to a Pandas Dataframe ...")
@@ -188,7 +166,7 @@ def mat_files_filtered_to_dict(res_dir, var_lst, savename_append, save_to_csv=Fa
     :return res_dict: dictionary:   for looping multiple result files, necessary for streamlit magic stuff
     """
     res_dict = {}
-    mat_files = dir_to_paths(res_dir)
+    mat_files = find("*.mat", res_dir)
 
     print("Importing {x} .mat files to Dataframes".format(x=str(len(mat_files))))
     for mat_file in mat_files:
@@ -197,51 +175,122 @@ def mat_files_filtered_to_dict(res_dir, var_lst, savename_append, save_to_csv=Fa
             print("Converting the Dataframe to a CSV ... This could take some minutes!")
             savename_csv = mat_file.split("/")[-1][:-4] + savename_append
             res_df.to_csv(savename_csv)  # prints an overview over the csv and saves it to the current folder(?)
-        res_dict[mat_file] = res_df
-
+        sim_name = mat_file.split("/")[-1][:-4]
+        res_dict[sim_name] = res_df
     return res_dict
 
 
-def plot_from_df_looped(res_df, key, dir_output, var_lst, ylabel, savename_append='', save_figs=False):
+def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, master_csv, savename_append='',
+                        save_figs=False):
     """
-    Creates a Matplotlib figure and plots the variable in 'var_to_plot'. Saves the figure in 'dir_output'
 
-    :param ylabel: string
+    Creates a Matplotlib figure and plots the variables in 'var_lst'. Saves the figure in 'dir_output'
+
+    :param master_csv:
+    :param plot_style:                  plot style 1: one figure plots all variables of a single simulation
+                                        plot style 2: one figure plots a single variable of all simulations
+    :param res_dict: dictionary         dictionary that holds the Simulation names as keys and the corresponding
+                                        variable data as a dataframe as values
+    :param y_label: string
     :param var_lst: list
-    :param res_df: pandas dataframe:    result file
-    :param key: String:                 path to result .mat file
     :param dir_output: String:          path to output directory
     :param savename_append: String:     Name to save the figures
     :param save_figs: Boolean:          decision to save figures to pdf and png
     :return: fig_lst: list:             list that contains all created figures
     """
-
-    name = key.split("/")[-1][:-4]
     fig_lst = []  # for return statement
 
-    fig, ax = plt.subplots()
-    fig.suptitle(name, fontsize=5)
-    lines = []
+    if plot_style == 1:     # Single Simulation
+        for sim_name in res_dict.keys():
 
-    for var in var_lst:
-        line = ax.plot(res_df[var].resample("D").mean(), linewidth=0.7,
-                       label=''.join(c for c in str(var) if c.isdigit()) if "Simple" in str(var) else str(var)[27:])
-        lines += line
+            fig, ax = plt.subplots()
+            fig.suptitle(sim_name, fontsize=5)
+            lines = []
 
-    ax.set_ylabel(ylabel)
-    ax.set_xlabel("Time in Date")
-    labs = [line.get_label() for line in lines]
-    ax.legend(lines, labs, loc="best", borderaxespad=0., ncol=2, fontsize=5)
-    fig.autofmt_xdate(rotation=45, ha="center")
+            for var in var_lst:
+                line = ax.plot(res_dict[sim_name][var].resample("D").mean(), linewidth=0.7,
+                               label=''.join(c for c in str(var) if c.isdigit()) if "Simple" in str(var) else str(var)[
+                                                                                                              27:])
+                lines += line
 
-    st.pyplot(fig)
-    fig_lst.append(fig)
+            ax.set_ylabel(y_label)
+            ax.set_xlabel("Time in Date")
+            labs = [line.get_label() for line in lines]
+            ax.legend(lines, labs, loc="best", borderaxespad=0., ncol=2, fontsize=5)
+            fig.autofmt_xdate(rotation=45, ha="center")
 
-    if save_figs:
-        fig.savefig(os.path.join(dir_output, name + "_" + savename_append + ".pdf"))
-        fig.savefig(os.path.join(dir_output, name + "_" + savename_append + ".png"), dpi=600)
+            st.pyplot(fig)
+            fig_lst.append(fig)
+
+            if save_figs:
+                if not os.path.exists(dir_output):
+                    os.makedirs(dir_output)
+                fig.savefig(os.path.join(dir_output, sim_name + "_" + savename_append + ".pdf"))
+                fig.savefig(os.path.join(dir_output, sim_name + "_" + savename_append + ".png"), dpi=600)
+
+    elif plot_style == 2:   # Single Variable
+        for var in var_lst:
+
+            fig, ax = plt.subplots()
+            fig.suptitle(var, fontsize=7)
+            lines = []
+
+            # take master_csv and reduce it down to the inspected Simulations and the variable that changes (and is
+            # therefore part of a simulation study). This is useful for  naming  the plotted lines.
+            master_df = pd.read_csv(master_csv, index_col=0)
+            master_indexes = list(master_df.index.values)
+            sim_names = res_dict.keys()
+            sim_names_to_drop = [x for x in master_indexes if x not in sim_names]
+            master_df = master_df.drop(index=sim_names_to_drop)
+            master_df = master_df[[i for i in master_df if len(set(master_df[i])) > 1]]
+            master_df = master_df.dropna(axis=1, how="any")
+            var0 = master_df.columns[0]
+
+            for sim_name in res_dict.keys():
+                val0 = master_df._get_value(sim_name, var0)
+                line = ax.plot(res_dict[sim_name][var].resample("D").mean(), linewidth=0.7,
+                               label=str(var0) + ' = ' + str(val0))
+                lines += line
+
+            # for sim_name in
+
+            ax.set_ylabel(y_label)
+            ax.set_xlabel("Time in Date")
+            labs = [line.get_label() for line in lines]
+            ax.legend(lines, labs, loc="best", borderaxespad=0., ncol=2, fontsize=5)
+            fig.autofmt_xdate(rotation=45, ha="center")
+
+            st.pyplot(fig)
+            fig_lst.append(fig)
+
+            if save_figs:
+                if not os.path.exists(dir_output):
+                    os.makedirs(dir_output)
+                fig.savefig(os.path.join(dir_output, var + "_" + savename_append + ".pdf"))
+                fig.savefig(os.path.join(dir_output, var + "_" + savename_append + ".png"), dpi=600)
 
     return fig_lst
+
+
+# unused functions
+def read_trajectory_names_file(res_path):
+    """
+    Takes the .mat file from the result path and saves it as a SimRes Instance. Then, all variable names that are
+    considered trajectories are saved in a list. A trajectory is considered a variable which has more than two values,
+    or the values are not equal. The 'get_trajectories' function exists only in the EBC branch of the ModelicaRes
+    package.
+    :param res_path:                str:    Path to the result file
+    :return all_trajectories_lst:   list:   names of all variables that are trajectories
+    """
+
+    print("Converting the .mat File to a SimRes instance ...")
+    sim = SimRes(fname=res_path)
+    all_trajectories_lst = sim.get_trajectories()  # all_trajectory_names is a list of variables that are trajectories.
+    print(
+        "There are " + str(len(all_trajectories_lst)) + " variables in the results file.")
+    # "+ str(all_trajectories_lst)) if you wish to print out all variable names
+
+    return all_trajectories_lst
 
 
 def plot_from_df(res_df, key, dir_output, var_to_plot, save_figs=True, plt_fig1=True, plt_fig2=True):
@@ -274,6 +323,8 @@ def plot_from_df(res_df, key, dir_output, var_to_plot, save_figs=True, plt_fig1=
         fig1.autofmt_xdate(rotation=45, ha="center")
 
         if save_figs:
+            if not os.path.exists(dir_output):
+                os.makedirs(dir_output)
             fig1.savefig(os.path.join(dir_output, name + "_mass_flow.pdf"))
             fig1.savefig(os.path.join(dir_output, name + "_mass_flow.png"), dpi=600)
 
@@ -313,6 +364,8 @@ def plot_from_df(res_df, key, dir_output, var_to_plot, save_figs=True, plt_fig1=
         fig2.autofmt_xdate(rotation=45, ha="center")
 
         if save_figs:
+            if not os.path.exists(dir_output):
+                os.makedirs(dir_output)
             fig2.savefig(os.path.join(dir_output, name + "_massflow_pressure.pdf"))
             fig2.savefig(os.path.join(dir_output, name + "_massflow_pressure.png"), dpi=600)
 
