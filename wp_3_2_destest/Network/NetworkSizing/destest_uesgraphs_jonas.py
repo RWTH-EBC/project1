@@ -172,22 +172,25 @@ def main():
     params_dict_5GDHC_basic = {
         # ----------------------------------------- General/Graph Data -------------------------------------------------
         'graph__network_type': 'heating',
-        'graph__t_nominal': 273.15 + 20,  # equals T_Ambient in Dymola? Start value for every pipe?
-        'graph__p_nominal': 5e5,
+        'graph__t_nominal': [273.15 + 10],  # equals T_Ambient in Dymola? Start value for every pipe?
+        'graph__p_nominal': [1e5],
         'model_ground': "t_ground_table",
         'graph__t_ground': 273.15 + 10,
         'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
-
         # ----------------- Pipe/Edge Data ----------------
         'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
-        'fac': 1.0,
-        'roughness': 2.5e-5,
+        'edge__fac': 1.0,
+        'edge__roughness': 2.5e-5,  #
+        'edge__diameter': [0.1, 0.5, 1, 2, 5, 10],     # Destest default: 0.02-0.05
+        'edge__length': 12,     # Destest default: 12-36
+        'edge__dIns': 0.04,     # Destest default: 0.045
+        'edge__kIns': 0.035,    # Destest default: 0.035, U-Value
         # -------------------------- Demand/House Node Data ----------------------------
-        'model_demand': aixlib_dhc + "Demands.ClosedLoop.SubstationHeating",  # 5GDHC,
+        'model_demand': aixlib_dhc + "Demands.ClosedLoop.SubstationHeating",  # 5GDHC
         'demand__heatDemand': heat_demand,
-        'demand__T_supplyHeatingSet': [273.15 + 40] * int(52560),  # T_VL Heizung
+        'demand__T_supplyHeatingSet': [273.15 + 30],  # T_VL Heizung
         # 'demand__t_return': 273.15 + 10,    # should be equal to supply__t_return!
-        'demand__dT_design': 10,    # also needed for estimate_m_flow_nominal function
+        # 'demand__dT_design': [5, 10, 15, 20],    # needed for estimate_m_flow_nominal function
         # 'demand__m_flo_bypass': 0.0005,
         # 'demand__dT_building': 10,  # inside the buildings? necessary for heatpump demand models
         # 'demand__cop_nominal': 5.0,
@@ -196,20 +199,18 @@ def main():
         # 'demand__t_eva_nominal': 273.15 + 10,  # should be around ground temp?
         # 'dTEva_nominal': dTEva_nominal,
         # 'dTCon_nominal': dTCon_nominal,
-        'demand__heatDemand_max': max_heat_demand,  # for ClosedLoop.SubstationHeating Template
-        'demand__deltaT_heatingSet': 10,  # for ClosedLoop.SubstationHeating Template, good estimate?
-        'demand__deltaT_heatingGridSet': 10,  # for ClosedLoop.SubstationHeating Template, good estimate?
-
-
+        'demand__heatDemand_max': max_heat_demand,
+        'demand__deltaT_heatingSet': [10, 20],  # Templeraturspreizung der Heizung
+        'demand__deltaT_heatingGridSet': [10],  # Difference Hot and Cold Pipe
         # ------------------------------ Supply Node Data --------------------------
         'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlant',
         # 'supply__TIn': 273.15 + 20,  # -> t_supply
         # 'supply__t_return': 273.15 + 10,    # should be equal to demand__t_return!
         # 'supply__dpIn': [6e5],    # p_supply
         # 'supply__p_return': 2e5,
-        'supply__m_flow_nominal': 1.0,
-        'supply__T_coolingSet': 273.15 + 5,
-        'supply__T_heatingSet': 273.15 + 20,
+        'supply__m_flow_nominal': [1, 10, -1, -10],
+        'supply__T_coolingSet': [273.15 + 5],   # Set Temperature cold Pipe
+        'supply__T_heatingSet': [273.15 + 15],  # Set Temperature hot Pipe
     }
 
     parameter_study(params_dict_5GDHC_basic, dir_sciebo)
@@ -233,9 +234,12 @@ def parameter_study(params_dict, dir_sciebo):
     params_dict_series = {k: v for k, v in params_dict.items()
                           if type(v) in [list, np.ndarray] and len(v) > 1000}
 
-    params_dict_cnsts = {k: v for k, v in params_dict.items()
-                         if type(v) in [str, int, float, float, np.float64]
-                         or type(v) == list and len(v) == 1}
+    params_dict_cnsts = {}
+    for k, v in params_dict.items():
+        if type(v) in [str, int, float, float, np.float64]:
+            params_dict_cnsts[k] = v
+        if type(v) == list and len(v) == 1:
+            params_dict_cnsts[k] = v[0]    # lists with one entry arent passed on as list objects
 
     # A SciKit ParameterGrid creates a generator over which you can iterate in a normal for loop.
     # In each iteration, you will have a dictionary containing the current parameter combination.
@@ -335,24 +339,24 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
                     simple_district.nodes[bldg][params_dict_key.replace('supply__', '')] = params_dict[params_dict_key]
 
     # ----------------------------------------- Pipe/Edge Data -------------------------------------------------------
-    # pipe data has the beginning and ending node, Length, Diameter, thickness, peak load, pressure loss, U-value
-    pipe_data = pd.read_csv('Pipe_data.csv', sep=',')
-    pipe_data = pipe_data.replace(to_replace='i', value='Destest_Supply')  # rename node 'i' to 'Destest_Supply'
-
-    # Add Diameter[m], Length[m], Insulation Thickness[m] and U-Value [W/mK] to edges/pipes
-    for index, row in pipe_data.iterrows():
-        simple_district.edges[
-            simple_district.nodes_by_name[row['Beginning Node']],
-            simple_district.nodes_by_name[row['Ending Node']]]['diameter'] = row['Inner Diameter [m]']
-        simple_district.edges[
-            simple_district.nodes_by_name[row['Beginning Node']],
-            simple_district.nodes_by_name[row['Ending Node']]]['length'] = row['Length [m]']
-        simple_district.edges[
-            simple_district.nodes_by_name[row['Beginning Node']],
-            simple_district.nodes_by_name[row['Ending Node']]]['dIns'] = row['Insulation Thickness [m]']
-        simple_district.edges[
-            simple_district.nodes_by_name[row['Beginning Node']],
-            simple_district.nodes_by_name[row['Ending Node']]]['kIns'] = row['U-value [W/mK]']
+    # # pipe data has the beginning and ending node, Length, Diameter, thickness, peak load, pressure loss, U-value
+    # pipe_data = pd.read_csv('Pipe_data.csv', sep=',')
+    # pipe_data = pipe_data.replace(to_replace='i', value='Destest_Supply')  # rename node 'i' to 'Destest_Supply'
+    #
+    # # Add Diameter[m], Length[m], Insulation Thickness[m] and U-Value [W/mK] to edges/pipes
+    # for index, row in pipe_data.iterrows():
+    #     simple_district.edges[
+    #         simple_district.nodes_by_name[row['Beginning Node']],
+    #         simple_district.nodes_by_name[row['Ending Node']]]['diameter'] = row['Inner Diameter [m]'] * 20
+    #     simple_district.edges[
+    #         simple_district.nodes_by_name[row['Beginning Node']],
+    #         simple_district.nodes_by_name[row['Ending Node']]]['length'] = row['Length [m]']
+    #     simple_district.edges[
+    #         simple_district.nodes_by_name[row['Beginning Node']],
+    #         simple_district.nodes_by_name[row['Ending Node']]]['dIns'] = row['Insulation Thickness [m]'] / 10
+    #     simple_district.edges[
+    #         simple_district.nodes_by_name[row['Beginning Node']],
+    #         simple_district.nodes_by_name[row['Ending Node']]]['kIns'] = row['U-value [W/mK]']
 
     for edge in simple_district.edges():
         simple_district.edges[edge[0], edge[1]]['name'] = str(edge[0]) + 'to' + str(edge[1])
@@ -364,7 +368,7 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
                     params_dict_key.replace('edge__', '')] = params_dict[params_dict_key]
 
     # write m_flow_nominal to the graphs edges with uesgraph function
-    sysmod_utils.estimate_m_flow_nominal(graph=simple_district, dT_design=params_dict['demand__dT_design'],
+    sysmod_utils.estimate_m_flow_nominal(graph=simple_district, dT_design=params_dict['demand__deltaT_heatingGridSet'],
                                          network_type='heating', input_heat_str='heatDemand')
 
     # --------------- Visualization, Save  ----------------
