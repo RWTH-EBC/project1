@@ -27,16 +27,9 @@ def main():
     # parameters
     aixlib_dhc = "AixLib.Fluid.DistrictHeatingCooling."
 
-    demand_data = pd.read_csv(
-        'https://raw.githubusercontent.com/ibpsa/project1/master/wp_3_1_destest/'
-        + 'Buildings/SimpleDistrict/Results/SimpleDistrict_IDEAS/SimpleDistrict_district.csv',
-        sep=';',
-        index_col=0)
-    demand_data.columns = demand_data.columns.str.replace(' / W', '')  # rename demand
-    heat_demand = demand_data[
-        "SimpleDistrict_1"].values  # only demand for one District is taken (as they're all the same)
-    heat_demand = [round(x, 1) for x in heat_demand]  # this demand is rounded to 1 digit for better readability
+    heat_demand, cold_demand = import_demands_from_github()
     max_heat_demand = max(heat_demand)
+    max_cold_demand = max(cold_demand)
 
     params_dict_testing = {
         # 'variable': 'value',      # eventually needed for csv generation? pandas takes first entry as index
@@ -169,7 +162,8 @@ def main():
         'model_ground': "t_ground_table",
     }
 
-    params_dict_5GDHC_basic = {
+
+    params_dict_5g_heating = {
         # ----------------------------------------- General/Graph Data -------------------------------------------------
         'graph__network_type': 'heating',
         'graph__t_nominal': [273.15 + 10],  # equals T_Ambient in Dymola? Start value for every pipe?
@@ -181,10 +175,10 @@ def main():
         'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
         'edge__fac': 1.0,
         'edge__roughness': 2.5e-5,  #
-        'edge__diameter': [0.1, 0.5, 1, 2, 5, 10],     # Destest default: 0.02-0.05
-        'edge__length': 12,     # Destest default: 12-36
-        'edge__dIns': 0.04,     # Destest default: 0.045
-        'edge__kIns': 0.035,    # Destest default: 0.035, U-Value
+        'edge__diameter': [0.1],  # Destest default: 0.02-0.05
+        'edge__length': 12,  # Destest default: 12-36
+        'edge__dIns': 0.04,  # Destest default: 0.045
+        'edge__kIns': 0.035,  # Destest default: 0.035, U-Value
         # -------------------------- Demand/House Node Data ----------------------------
         'model_demand': aixlib_dhc + "Demands.ClosedLoop.SubstationHeating",  # 5GDHC
         'demand__heatDemand': heat_demand,
@@ -200,20 +194,118 @@ def main():
         # 'dTEva_nominal': dTEva_nominal,
         # 'dTCon_nominal': dTCon_nominal,
         'demand__heatDemand_max': max_heat_demand,
-        'demand__deltaT_heatingSet': [10, 20],  # Templeraturspreizung der Heizung
-        'demand__deltaT_heatingGridSet': [10],  # Difference Hot and Cold Pipe
+        'demand__deltaT_heatingSet': [10],  # Templeraturspreizung der Heizung
+        'demand__deltaT_heatingGridSet': [6],  # Difference Hot and Cold Pipe
         # ------------------------------ Supply Node Data --------------------------
         'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlant',
         # 'supply__TIn': 273.15 + 20,  # -> t_supply
         # 'supply__t_return': 273.15 + 10,    # should be equal to demand__t_return!
         # 'supply__dpIn': [6e5],    # p_supply
         # 'supply__p_return': 2e5,
-        'supply__m_flow_nominal': [1, 10, -1, -10],
-        'supply__T_coolingSet': [273.15 + 5],   # Set Temperature cold Pipe
-        'supply__T_heatingSet': [273.15 + 15],  # Set Temperature hot Pipe
+        'supply__m_flow_nominal': [2],
+        'supply__T_coolingSet': [273.15 + 16],  # Set Temperature cold Pipe
+        'supply__T_heatingSet': [273.15 + 22],  # Set Temperature hot Pipe
+    }
+    params_dict_5g_heating_cooling = {
+        # ----------------------------------------- General/Graph Data -------------------------------------------------
+        'graph__network_type': 'heating',
+        'graph__t_nominal': [273.15 + 10],  # equals T_Ambient in Dymola? Start value for every pipe?
+        'graph__p_nominal': [1e5],
+        'model_ground': "t_ground_table",
+        'graph__t_ground': 273.15 + 10,
+        'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
+        # ----------------- Pipe/Edge Data ----------------
+        'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
+        'edge__fac': 1.0,
+        'edge__roughness': 2.5e-5,  #
+        'edge__diameter': [0.1],  # Destest default: 0.02-0.05
+        'edge__length': 12,  # Destest default: 12-36
+        'edge__dIns': 0.004,  # Destest default: 0.045, Isolation Thickness
+        'edge__kIns': 0.0035,  # Destest default: 0.035, U-Value
+        # -------------------------- Demand/House Node Data ----------------------------
+        'model_demand': aixlib_dhc + "Demands.ClosedLoop.SubstationHeatingCoolingVarDeltaT",  # 5GDHC
+        'demand__heatDemand': heat_demand,
+        'demand__coolingDemand': cold_demand,
+        'demand__T_supplyHeatingSet': [273.15 + 30],  # T_VL Heizung
+        'demand__T_supplyCoolingSet': [273.15 + 12],  # T_VL Kühlung
+        'demand__heatDemand_max': max_heat_demand,
+        'demand__coolingDemand_max': max_cold_demand,
+
+        'demand__deltaT_heatingSet': [5],  # Templeraturspreizung der Heizung
+        'demand__deltaT_coolingSet': [5],  # Templeraturspreizung der Kühlung
+
+        'demand__deltaT_heatingGridSet': [4],  # Difference Hot and Cold Pipe
+        'demand__deltaT_coolingGridSet': [4],  # Difference Cold and Hot Pipe ?????
+        # ------------------------------ Supply Node Data --------------------------
+        'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlant',
+        # 'supply__TIn': 273.15 + 20,  # -> t_supply
+        # 'supply__t_return': 273.15 + 10,    # should be equal to demand__t_return!
+        # 'supply__dpIn': [6e5],    # p_supply
+        # 'supply__p_return': 2e5,
+        'supply__m_flow_nominal': [2],
+        'supply__T_coolingSet': [273.15 + 16],  # Set Temperature cold Pipe
+        'supply__T_heatingSet': [273.15 + 22],  # Set Temperature hot Pipe
     }
 
-    parameter_study(params_dict_5GDHC_basic, dir_sciebo)
+    params_dict_5g_heating_micha = {
+        # ----------------------------------------- General/Graph Data -------------------------------------------------
+        'graph__network_type': 'heating',
+        'graph__t_nominal': [273.15 + 10],  # equals T_Ambient in Dymola? Start value for every pipe?
+        'graph__p_nominal': [1e5],
+        'model_ground': "t_ground_table",
+        'graph__t_ground': 273.15 + 10,
+        'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
+        # ----------------- Pipe/Edge Data ----------------
+        'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
+        'edge__fac': 1.0,
+        'edge__roughness': 2.5e-5,  #
+        'edge__diameter': [0.1],  # Destest default: 0.02-0.05
+        'edge__length': 12,  # Destest default: 12-36
+        'edge__dIns': 0.004,  # Destest default: 0.045
+        'edge__kIns': 0.0035,  # Destest default: 0.035, U-Value
+        # -------------------------- Demand/House Node Data ----------------------------
+        'model_demand': aixlib_dhc + "Demands.ClosedLoop.PumpControlledHeatPumpFixDeltaT",  # 5GDHC
+        'demand__Q_flow_input': heat_demand,
+        'demand__TSupplyBuilding': [273.15 + 30],  # T_VL Heizung
+        'demand__Q_flow_nominal': max_heat_demand,
+        'demand__TReturn': [18],  # Return Temp vom Netz??
+        'demand__dTDesign': [4],  # Difference Hot and Cold Pipe
+        'demand__dTBuilding': [5],   # Temperaturspreizung Heizung
+        # ------------------------------ Supply Node Data --------------------------
+        'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlant',
+        # 'supply__TIn': 273.15 + 20,  # -> t_supply
+        # 'supply__t_return': 273.15 + 10,    # should be equal to demand__t_return!
+        # 'supply__dpIn': [6e5],    # p_supply
+        # 'supply__p_return': 2e5,
+        'supply__m_flow_nominal': [2],
+        'supply__T_coolingSet': [273.15 + 18],  # Set Temperature cold Pipe
+        'supply__T_heatingSet': [273.15 + 22],  # Set Temperature hot Pipe
+    }
+
+    parameter_study(params_dict_5g_heating_cooling, dir_sciebo)
+
+
+def import_demands_from_github():
+    demand_data = pd.read_csv('https://raw.githubusercontent.com/ibpsa/project1/master/wp_3_1_destest/'
+                              + 'Buildings/SimpleDistrict/Results/SimpleDistrict_IDEAS/SimpleDistrict_district.csv',
+                              sep=';',
+                              index_col=0)  # first row, the timesteps are taken as the dataframe index
+    demand_data.columns = demand_data.columns.str.replace(' / W', '')  # rename demand
+
+    heat_demand_df = demand_data[["SimpleDistrict_1"]]
+
+    half = int((len(heat_demand_df) - 1) / 2)   # half the length of the demand timeseries
+
+    cold_demand_df = heat_demand_df[half:].append(heat_demand_df[:half])     # shift demand by half a year
+    cold_demand_df.reset_index(inplace=True, drop=True)
+
+    heat_demand = heat_demand_df["SimpleDistrict_1"].values     # mane numpy nd array
+    cold_demand = cold_demand_df["SimpleDistrict_1"].values     # mane numpy nd array
+
+    heat_demand = [round(x, 1) for x in heat_demand]  # this demand is rounded to 1 digit for better readability
+    cold_demand = [round(x, 1) for x in cold_demand]  # this demand is rounded to 1 digit for better readability
+
+    return heat_demand, cold_demand
 
 
 def parameter_study(params_dict, dir_sciebo):
@@ -224,7 +316,9 @@ def parameter_study(params_dict, dir_sciebo):
     In order to no confuse time-series with parameters (for example to pass a demand profile),
     only value lists with less than 1000 entries are considered parameters.
 
-    :return:
+    :param params_dict: Dictionary: simulation parameters and their initial values
+    :param dir_sciebo:  String:     path to the sciebo folder
+    :return: len(param_grid):       number of created simulations
     """
     # lists that have only have 1 entry aren't considered parameters, but constants.
     # lists with more than 1000 entries are considered time series
@@ -236,10 +330,10 @@ def parameter_study(params_dict, dir_sciebo):
 
     params_dict_cnsts = {}
     for k, v in params_dict.items():
-        if type(v) in [str, int, float, float, np.float64]:
+        if type(v) in [str, int, float, np.float64]:
             params_dict_cnsts[k] = v
         if type(v) == list and len(v) == 1:
-            params_dict_cnsts[k] = v[0]    # lists with one entry arent passed on as list objects
+            params_dict_cnsts[k] = v[0]  # lists with one entry arent passed on as list objects
 
     # A SciKit ParameterGrid creates a generator over which you can iterate in a normal for loop.
     # In each iteration, you will have a dictionary containing the current parameter combination.
@@ -321,6 +415,7 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
             simple_district.add_edge(simple_district.nodes_by_name[key], simple_district.nodes_by_name[value])
 
     # adding info to the graph, part of this could also be done with the prepare_graph function
+    # afterwards, the xxx__ pre-strings are removed from the dictionary keywords.
     for params_dict_key in params_dict.keys():
 
         # ----------------------------------------- General/Graph Data ------------------------------------------------
@@ -414,53 +509,6 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
             params_dict[series_i] = new_entry
         overview_df = pd.DataFrame.from_records(params_dict, index=[save_name])
         overview_df.to_csv(path_to_csv)
-
-
-def parameter_study_old(params_dict, dir_sciebo, p1='', p1_values=np.arange(1, 1), p2='', p2_values=np.arange(1, 1)):
-    """
-    Function that takes the params_dict with its default values and creates a number of alternative
-    dictionaries, depending on how many parameters and corresponding values are given. Each alternative dictionary is
-    then passed to the 'generate_model' function. The number of generated dictionaries, and thus the number of
-    simulations is returned.
-    :param params_dict: dictionary: stores the simulation parameters and their initial values
-    :param dir_sciebo:  string:     stores the path of the sciebo folder
-    :param p1:          string:     name of parameter 1
-    :param p1_values:   np array:   list of values for parameter 1
-    :param p2:          string:     name of parameter 2
-    :param p2_values:   np array:   list of values for parameter 2
-    :return: runs:      integer:    number of simulations created
-    """
-    if p1 is '' and p2 is '':
-        generate_model(params_dict=params_dict, dir_sciebo=dir_sciebo)
-        runs = 1
-    elif p1 is '':
-        runs = len(p2_values)
-        print("{} values for the {} parameter are given: {}".format(runs, p2, p2_values))
-        for p2_value in p2_values:
-            params_dict[p2] = p2_value
-            generate_model(params_dict=params_dict, dir_sciebo=dir_sciebo)
-    elif p2 is '':
-        runs = len(p1_values)
-        print("{} values for the {} parameter are given: {}".format(runs, p1, p1_values))
-        for p1_value in p1_values:
-            params_dict[p1] = p1_value
-            generate_model(params_dict=params_dict, dir_sciebo=dir_sciebo)
-    else:
-        runs = len(p1_values) * len(p2_values)
-        print("Two parameters are given: \n"
-              "     {} values for the {} parameter: {} \n"
-              "     {} values for the {} parameter: {} \n"
-              "         This results in {} combinations of the two parameters"
-              .format(len(p1_values), p1, p1_values, len(p2_values), p2, p2_values, runs))
-        for p1_value in p1_values:
-            params_dict[p1] = p1_value
-            for var2_value in p2_values:
-                params_dict[p2] = var2_value
-                generate_model(params_dict=params_dict, dir_sciebo=dir_sciebo)
-
-    print("{} Simulation setups have been created and saved at {} \n"
-          "Those setups are now ready to be simulated with Dymola".format(runs, dir_sciebo))
-    return runs
 
 
 if __name__ == '__main__':
