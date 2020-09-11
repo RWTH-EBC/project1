@@ -11,6 +11,13 @@ import itertools
 from sklearn.model_selection import ParameterGrid
 import sys
 
+import pycity_base.classes.demand.domestic_hot_water as dhw
+import pycity_base.classes.timer as time
+import pycity_base.classes.weather as weath
+import pycity_base.classes.prices as price
+import pycity_base.classes.environment as env
+import pycity_base.classes.demand.occupancy as occ
+
 
 # import csv
 
@@ -24,13 +31,15 @@ def main():
     else:
         raise Exception("Unknown operating system")
 
-    # parameters
-    aixlib_dhc = "AixLib.Fluid.DistrictHeatingCooling."
-
-    heat_demand, cold_demand = import_demands_from_github()
+    # demand profiles
+    heat_demand, cold_demand = import_demands_from_txt_file()
+    # heat_demand, cold_demand = import_demands_from_github()
+    dhw_demand = generate_dhw_profile_pycity()
     max_heat_demand = max(heat_demand)
     max_cold_demand = max(cold_demand)
 
+    # ------- Parameter Dictionaries to pass into parameter study function -----------
+    aixlib_dhc = "AixLib.Fluid.DistrictHeatingCooling."
     params_dict_testing = {
         # 'variable': 'value',      # eventually needed for csv generation? pandas takes first entry as index
         # ----------------- Pipe/Edge Data ----------------
@@ -161,8 +170,6 @@ def main():
         'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
         'model_ground': "t_ground_table",
     }
-
-
     params_dict_5g_heating = {
         # ----------------------------------------- General/Graph Data -------------------------------------------------
         'graph__network_type': 'heating',
@@ -246,7 +253,6 @@ def main():
         'supply__T_coolingSet': [273.15 + 16],  # Set Temperature cold Pipe
         'supply__T_heatingSet': [273.15 + 22],  # Set Temperature hot Pipe
     }
-
     params_dict_5g_heating_micha = {
         # ----------------------------------------- General/Graph Data -------------------------------------------------
         'graph__network_type': 'heating',
@@ -270,7 +276,7 @@ def main():
         'demand__Q_flow_nominal': max_heat_demand,
         'demand__TReturn': [18],  # Return Temp vom Netz??
         'demand__dTDesign': [4],  # Difference Hot and Cold Pipe
-        'demand__dTBuilding': [5],   # Temperaturspreizung Heizung
+        'demand__dTBuilding': [5],  # Temperaturspreizung Heizung
         # ------------------------------ Supply Node Data --------------------------
         'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlant',
         # 'supply__TIn': 273.15 + 20,  # -> t_supply
@@ -281,8 +287,39 @@ def main():
         'supply__T_coolingSet': [273.15 + 18],  # Set Temperature cold Pipe
         'supply__T_heatingSet': [273.15 + 22],  # Set Temperature hot Pipe
     }
+    
+    generate_dhw_profile_pycity()
 
     parameter_study(params_dict_5g_heating_cooling, dir_sciebo)
+
+
+def generate_dhw_profile_pycity():
+    #  Define the time discretization for the timer object
+    timestep = 3600  # in seconds
+
+    #  Define the total number of timesteps (in this case for one year)
+    nb_timesteps = int(365 * 24 * 3600 / timestep)
+
+    #  Generate environment with timer, weather, and prices objects
+    timer = time.Timer(time_discretization=timestep,
+                       timesteps_total=nb_timesteps)
+    weather = weath.Weather(timer=timer)
+    prices = price.Prices()
+
+    environment = env.Environment(timer=timer, weather=weather, prices=prices)
+
+    #  Generate occupancy object with stochastic user profile
+    occupancy = occ.Occupancy(environment=environment, number_occupants=5)
+
+    dhw_obj = dhw.DomesticHotWater(
+        environment=environment,
+        t_flow=60,  # DHW output temperature in degree Celsius
+        method=2,  # Stochastic dhw profile, Method 1 not working
+        supply_temperature=25,  # DHW inlet flow temperature in degree C.
+        occupancy=occupancy.occupancy)  # Occupancy profile (600 sec resolution)
+    dhw_demand = dhw_obj.loadcurve  # ndarray with 8760 timesteps in Watt
+
+    return dhw_demand
 
 
 def import_demands_from_github():
@@ -294,16 +331,35 @@ def import_demands_from_github():
 
     heat_demand_df = demand_data[["SimpleDistrict_1"]]
 
-    half = int((len(heat_demand_df) - 1) / 2)   # half the length of the demand timeseries
+    half = int((len(heat_demand_df) - 1) / 2)  # half the length of the demand timeseries
 
-    cold_demand_df = heat_demand_df[half:].append(heat_demand_df[:half])     # shift demand by half a year
+    cold_demand_df = heat_demand_df[half:].append(heat_demand_df[:half])  # shift demand by half a year
     cold_demand_df.reset_index(inplace=True, drop=True)
 
-    heat_demand = heat_demand_df["SimpleDistrict_1"].values     # mane numpy nd array
-    cold_demand = cold_demand_df["SimpleDistrict_1"].values     # mane numpy nd array
+    heat_demand = heat_demand_df["SimpleDistrict_1"].values  # mane numpy nd array
+    cold_demand = cold_demand_df["SimpleDistrict_1"].values  # mane numpy nd array
 
     heat_demand = [round(x, 1) for x in heat_demand]  # this demand is rounded to 1 digit for better readability
     cold_demand = [round(x, 1) for x in cold_demand]  # this demand is rounded to 1 digit for better readability
+
+    return heat_demand, cold_demand
+
+
+def import_demands_from_txt_file():
+    # files from EON.EBC DemGen. 8760 time steps in Watts [W]
+    # Calculate your own demands at http://demgen.testinstanz.os-cloud.eonerc.rwth-aachen.de/
+    heat_demand_file = '/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/' \
+           'demand_profiles/Heat_demand_Berlin_200qm_SingleFamilyHouse_SIA_standard_Values.txt'
+    cold_demand_file = '/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/' \
+                       'demand_profiles/Cool_demand_Berlin_200qm_SingleFamilyHouse_SIA_standard_Values.txt'
+
+    # import txt file to numpy n array
+    heat_demand_np = np.loadtxt(heat_demand_file)
+    cold_demand_np = np.loadtxt(cold_demand_file)
+
+    # demand is rounded to 1 digit for better readability and converted to a list object
+    heat_demand = [round(x, 1) for x in heat_demand_np]
+    cold_demand = [round(x, 1) for x in cold_demand_np]
 
     return heat_demand, cold_demand
 
