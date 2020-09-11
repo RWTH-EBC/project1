@@ -7,6 +7,7 @@ import os
 import platform
 from datetime import datetime
 from uesgraphs.systemmodels import utilities as sysmod_utils
+from uesgraphs.systemmodels import systemmodelheating as sysmh
 import itertools
 from sklearn.model_selection import ParameterGrid
 import sys
@@ -170,6 +171,7 @@ def main():
         'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
         'model_ground': "t_ground_table",
     }
+
     params_dict_5g_heating = {
         # ----------------------------------------- General/Graph Data -------------------------------------------------
         'graph__network_type': 'heating',
@@ -253,6 +255,42 @@ def main():
         'supply__T_coolingSet': [273.15 + 16],  # Set Temperature cold Pipe
         'supply__T_heatingSet': [273.15 + 22],  # Set Temperature hot Pipe
     }
+    params_dict_5g_heating_cooling_xiyuan = {
+        # ----------------------------------------- General/Graph Data -------------------------------------------------
+        'graph__network_type': 'heating',
+        'graph__t_nominal': [273.15 + 10],  # equals T_Ambient in Dymola? Start value for every pipe?
+        'graph__p_nominal': [1e5],
+        'model_ground': "t_ground_table",
+        'graph__t_ground': 273.15 + 10,
+        'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
+        # ----------------- Pipe/Edge Data ----------------
+        'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
+        'edge__fac': 1.0,
+        'edge__roughness': 2.5e-5,  #
+        'edge__diameter': [0.1],  # Destest default: 0.02-0.05
+        'edge__length': 12,  # Destest default: 12-36
+        'edge__dIns': 0.004,  # Destest default: 0.045, Isolation Thickness
+        'edge__kIns': 0.0035,  # Destest default: 0.035, U-Value
+        # -------------------------- Demand/House Node Data ----------------------------
+        'model_demand': aixlib_dhc + "Demands.ClosedLoop.PumpControlledwithHP_v4_ze_jonas",  # 5GDHC
+
+        'demand__heat_input': heat_demand,
+        'demand__cold_input': cold_demand,
+        'demand__dhw_input': dhw_demand,
+        'demand__T_supplyHeating': [273.15 + 30],  # T_VL Heizung
+        'demand__T_supplyCooling': [273.15 + 12],  # T_VL Kühlung
+        'demand__heatDemand_max': max_heat_demand,
+        'demand__coolingDemand_max': max_cold_demand,
+
+        # ------------------------------ Supply Node Data --------------------------
+        'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPump',
+        'supply__TIn': 273.15 + 20,  # -> t_supply
+        # 'supply__t_return': 273.15 + 10,    # should be equal to demand__t_return!
+        'supply__dpIn': [5e5],    # p_supply
+        # 'supply__p_return': 2e5,
+        'supply__m_flow_nominal': [2],
+    }
+
     params_dict_5g_heating_micha = {
         # ----------------------------------------- General/Graph Data -------------------------------------------------
         'graph__network_type': 'heating',
@@ -329,6 +367,10 @@ def import_demands_from_github():
                               index_col=0)  # first row, the timesteps are taken as the dataframe index
     demand_data.columns = demand_data.columns.str.replace(' / W', '')  # rename demand
 
+    dhw_profile = 'D:\mma-jgr\sciebo-folder\RWTH_Dokumente\MA_Master' \
+                  'arbeit_RWTH\Data\demand_profiles\dhw_demand_DHWcalc_Xiyuan.txt'
+    # dhw_demand_df = pd.read_csv(dhw_profile)
+    dhw_demand = [int(word.strip('\n')) for word in open(dhw_profile).readlines()]
     heat_demand_df = demand_data[["SimpleDistrict_1"]]
 
     half = int((len(heat_demand_df) - 1) / 2)  # half the length of the demand timeseries
@@ -341,8 +383,9 @@ def import_demands_from_github():
 
     heat_demand = [round(x, 1) for x in heat_demand]  # this demand is rounded to 1 digit for better readability
     cold_demand = [round(x, 1) for x in cold_demand]  # this demand is rounded to 1 digit for better readability
+    dhw_demand = [round(x, 1) for x in dhw_demand]
 
-    return heat_demand, cold_demand
+    return heat_demand, cold_demand, dhw_demand
 
 
 def import_demands_from_txt_file():
@@ -519,8 +562,8 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
                     params_dict_key.replace('edge__', '')] = params_dict[params_dict_key]
 
     # write m_flow_nominal to the graphs edges with uesgraph function
-    sysmod_utils.estimate_m_flow_nominal(graph=simple_district, dT_design=params_dict['demand__deltaT_heatingGridSet'],
-                                         network_type='heating', input_heat_str='heatDemand')
+    sysmod_utils.estimate_m_flow_nominal(graph=simple_district, dT_design=10,
+                                         network_type='heating', input_heat_str='heat_input')
 
     # --------------- Visualization, Save  ----------------
     vis = ug.Visuals(simple_district)  # Plotting / Visualization with pipe diameters scaling
@@ -540,21 +583,54 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
     dir_model = os.path.join(dir_models_sciebo, save_name)
 
     # creates a return network, creates a model from SystemModelHeating, sets the demand, supply, pipe etc. models
-    sysmod_utils.create_model(
-        name=save_name,
-        save_at=dir_models_sciebo,
-        graph=simple_district,
-        stop_time=365 * 24 * 3600,
-        timestep=600,
-        model_supply=params_dict['model_supply'],
-        model_demand=params_dict['model_demand'],
-        model_pipe=params_dict['model_pipe'],
-        model_medium=params_dict['model_medium'],
-        model_ground=params_dict['model_ground'],
-        T_nominal=params_dict['graph__t_nominal'],
-        p_nominal=params_dict['graph__p_nominal'],
-        t_ground_prescribed=params_dict['graph__t_ground']
-    )
+    # sysmod_utils.create_model(
+    #     name=save_name,
+    #     save_at=dir_models_sciebo,
+    #     graph=simple_district,
+    #     stop_time=365 * 24 * 3600,
+    #     timestep=600,
+    #     model_supply=params_dict['model_supply'],
+    #     model_demand=params_dict['model_demand'],
+    #     model_pipe=params_dict['model_pipe'],
+    #     model_medium=params_dict['model_medium'],
+    #     model_ground=params_dict['model_ground'],
+    #     T_nominal=params_dict['graph__t_nominal'],
+    #     p_nominal=params_dict['graph__p_nominal'],
+    #     t_ground_prescribed=params_dict['graph__t_ground']
+    # )
+
+    # ------------modified create_model function, default is part of sysmod_utils -------------
+    assert not save_name[0].isdigit(), "Model name cannot start with a digit"
+
+    new_model = sysmh.SystemModelHeating(network_type=simple_district.graph["network_type"])
+    new_model.stop_time = 365 * 24 * 3600
+    new_model.timestep = 600
+    new_model.import_from_uesgraph(simple_district)
+    new_model.set_connection(remove_network_nodes=True)
+
+    new_model.add_return_network = True
+    new_model.medium = params_dict['model_medium']
+    new_model.medium_building = params_dict['model_medium']
+    new_model.T_nominal = params_dict['graph__t_nominal']
+    new_model.p_nominal = params_dict['graph__p_nominal']
+    new_model.ground_model = "t_ground_table"
+    new_model.graph["T_ground"] = params_dict['graph__t_ground']
+    new_model.tolerance = 1e-5
+
+    for node in new_model.nodelist_building:
+        is_supply = "is_supply_{}".format(new_model.network_type)
+        if new_model.nodes[node][is_supply]:
+            new_model.nodes[node]["comp_model"] = params_dict['model_supply']
+        else:
+            new_model.nodes[node]["comp_model"] = params_dict['model_demand']
+
+    for node in new_model.nodelist_pipe:
+        new_model.nodes[node]["comp_model"] = params_dict['model_pipe']
+
+    name = save_name[0].upper() + save_name[1:]
+    new_model.model_name = name
+    new_model.write_modelica_package(save_at=dir_models_sciebo)
+    # ---------------------------- end create_model function ---------------------------------
 
     if save_params_to_csv:
         path_to_csv = dir_model + "/" + save_name + "_overview.csv"
