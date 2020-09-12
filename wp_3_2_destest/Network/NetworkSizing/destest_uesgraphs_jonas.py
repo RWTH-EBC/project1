@@ -11,6 +11,7 @@ from uesgraphs.systemmodels import systemmodelheating as sysmh
 import itertools
 from sklearn.model_selection import ParameterGrid
 import sys
+import matplotlib.pyplot as plt
 
 import pycity_base.classes.demand.domestic_hot_water as dhw
 import pycity_base.classes.timer as time
@@ -24,7 +25,7 @@ import pycity_base.classes.demand.occupancy as occ
 
 
 def main():
-    # paths
+    # --------------------------- paths ---------------------------
     if platform.system() == 'Darwin':
         dir_sciebo = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data"
     elif platform.system() == 'Windows':
@@ -32,14 +33,20 @@ def main():
     else:
         raise Exception("Unknown operating system")
 
-    # demand profiles
-    heat_demand, cold_demand = import_demands_from_txt_file()
-    # heat_demand, cold_demand = import_demands_from_github()
-    dhw_demand = generate_dhw_profile_pycity()
+    # ------------------------------------ demand profiles---------------------------------------------
+    dhw_demand_pycity = generate_dhw_profile_pycity()
+    dhw_demand_dhwcalc = import_from_dhwcalc()
+    heat_demand_ibpsa = import_demands_from_github()
+    heat_demand_demgen, cold_demand_demgen = import_demands_from_txt_file()
+
+    heat_demand = heat_demand_demgen
+    cold_demand = cold_demand_demgen
+    dhw_demand = dhw_demand_pycity
+
     max_heat_demand = max(heat_demand)
     max_cold_demand = max(cold_demand)
 
-    # ------- Parameter Dictionaries to pass into parameter study function -----------
+    # ------------------------ Parameter Dictionaries to pass into parameter study function -------------------------
     aixlib_dhc = "AixLib.Fluid.DistrictHeatingCooling."
     params_dict_testing = {
         # 'variable': 'value',      # eventually needed for csv generation? pandas takes first entry as index
@@ -286,7 +293,7 @@ def main():
         'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPump',
         'supply__TIn': 273.15 + 20,  # -> t_supply
         # 'supply__t_return': 273.15 + 10,    # should be equal to demand__t_return!
-        'supply__dpIn': [5e5],    # p_supply
+        'supply__dpIn': [5e5],  # p_supply
         # 'supply__p_return': 2e5,
         'supply__m_flow_nominal': [2],
     }
@@ -325,25 +332,24 @@ def main():
         'supply__T_coolingSet': [273.15 + 18],  # Set Temperature cold Pipe
         'supply__T_heatingSet': [273.15 + 22],  # Set Temperature hot Pipe
     }
-    
-    generate_dhw_profile_pycity()
 
+    # ---------------------------------------- create Simulations ----------------------------------------------
     parameter_study(params_dict_5g_heating_cooling, dir_sciebo)
 
 
 def generate_dhw_profile_pycity():
-    #  Define the time discretization for the timer object
-    timestep = 3600  # in seconds
-
-    #  Define the total number of timesteps (in this case for one year)
-    nb_timesteps = int(365 * 24 * 3600 / timestep)
-
+    """
+    from https://github.com/RWTH-EBC/pyCity
+    Problem: a lot of parameters, every time a different dhw profile
+    :return:
+    """
     #  Generate environment with timer, weather, and prices objects
-    timer = time.Timer(time_discretization=timestep,
-                       timesteps_total=nb_timesteps)
+    timer = time.Timer(time_discretization=3600,  # in seconds
+                       timesteps_total=int(365 * 24)
+                       )
+
     weather = weath.Weather(timer=timer)
     prices = price.Prices()
-
     environment = env.Environment(timer=timer, weather=weather, prices=prices)
 
     #  Generate occupancy object with stochastic user profile
@@ -357,20 +363,20 @@ def generate_dhw_profile_pycity():
         occupancy=occupancy.occupancy)  # Occupancy profile (600 sec resolution)
     dhw_demand = dhw_obj.loadcurve  # ndarray with 8760 timesteps in Watt
 
+    plt.plot(dhw_demand)
+    plt.ylabel('dhw pycity, sum={:.2f}'.format(sum(dhw_demand)/1000))
+    plt.show()
+
     return dhw_demand
 
 
-def import_demands_from_github():
-    demand_data = pd.read_csv('https://raw.githubusercontent.com/ibpsa/project1/master/wp_3_1_destest/'
-                              + 'Buildings/SimpleDistrict/Results/SimpleDistrict_IDEAS/SimpleDistrict_district.csv',
-                              sep=';',
-                              index_col=0)  # first row, the timesteps are taken as the dataframe index
+def import_demands_from_github(compute_cold=False):
+    # compute cold just swaps the heat time series from winter to summer
+    github_ibpsa_file = 'https://raw.githubusercontent.com/ibpsa/project1/master/wp_3_1_destest/' \
+                        'Buildings/SimpleDistrict/Results/SimpleDistrict_IDEAS/SimpleDistrict_district.csv'
+    demand_data = pd.read_csv(github_ibpsa_file, sep=';', index_col=0)  # first row (timesteps) is dataframe index
     demand_data.columns = demand_data.columns.str.replace(' / W', '')  # rename demand
 
-    dhw_profile = 'D:\mma-jgr\sciebo-folder\RWTH_Dokumente\MA_Master' \
-                  'arbeit_RWTH\Data\demand_profiles\dhw_demand_DHWcalc_Xiyuan.txt'
-    # dhw_demand_df = pd.read_csv(dhw_profile)
-    dhw_demand = [int(word.strip('\n')) for word in open(dhw_profile).readlines()]
     heat_demand_df = demand_data[["SimpleDistrict_1"]]
 
     half = int((len(heat_demand_df) - 1) / 2)  # half the length of the demand timeseries
@@ -383,16 +389,50 @@ def import_demands_from_github():
 
     heat_demand = [round(x, 1) for x in heat_demand]  # this demand is rounded to 1 digit for better readability
     cold_demand = [round(x, 1) for x in cold_demand]  # this demand is rounded to 1 digit for better readability
-    dhw_demand = [round(x, 1) for x in dhw_demand]
 
-    return heat_demand, cold_demand, dhw_demand
+    if not compute_cold:
+        return heat_demand
+    else:
+        return heat_demand, cold_demand
+
+
+def import_from_dhwcalc():
+    """DHWcalc yields Volume Flow TimeSeries (in Liters per hour).
+    To get Energyflows, we have to multiply by rho, cp and dt
+    Q = V * rho * cp * dt"""
+
+    if platform.system() == 'Darwin':
+        dhw_profile = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/demand_profiles/" \
+                      "DHW_default_8760_200l_stepFunctionforMonths/DHW0001_DHW.txt"
+    elif platform.system() == 'Windows':
+        dhw_profile = ''
+    else:
+        raise Exception("Unknown operating system")
+
+    dhw_demand_LperH = [int(word.strip('\n')) for word in open(dhw_profile).readlines()]
+    dhw_demand_LperH = [round(x, 1) for x in dhw_demand_LperH]
+
+    plt.plot(dhw_demand_LperH)
+    plt.ylabel('dhw DHWcalc LperH')
+    plt.show()
+
+    rho = 1/3600     # 1L/h = 1/3600 kg/s
+    cp = 4180       # J/kgK
+    dt = 35         # K
+    dhw_demand = [x*rho*cp*dt for x in dhw_demand_LperH]
+
+    plt.plot(dhw_demand)
+    plt.ylabel('dhw DHWcalc, sum={:.2f}'.format(sum(dhw_demand)/1000))
+    plt.show()
+
+    return dhw_demand
 
 
 def import_demands_from_txt_file():
     # files from EON.EBC DemGen. 8760 time steps in Watts [W]
     # Calculate your own demands at http://demgen.testinstanz.os-cloud.eonerc.rwth-aachen.de/
     heat_demand_file = '/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/' \
-           'demand_profiles/Heat_demand_Berlin_200qm_SingleFamilyHouse_SIA_standard_Values.txt'
+                       'demand_profiles/Heat_demand_Berlin_200qm_SingleFamilyHouse_SIA_standard_Values.txt'
     cold_demand_file = '/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/' \
                        'demand_profiles/Cool_demand_Berlin_200qm_SingleFamilyHouse_SIA_standard_Values.txt'
 
