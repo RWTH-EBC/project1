@@ -34,14 +34,14 @@ def main():
         raise Exception("Unknown operating system")
 
     # ------------------------------------ demand profiles---------------------------------------------
-    dhw_demand_pycity = generate_dhw_profile_pycity()
-    dhw_demand_dhwcalc = import_from_dhwcalc()
-    heat_demand_ibpsa = import_demands_from_github()
-    heat_demand_demgen, cold_demand_demgen = import_demands_from_txt_file()
+    # dhw_demand_pycity = generate_dhw_profile_pycity()
+    dhw_demand_dhwcalc = import_from_dhwcalc(dir_sciebo, plot_demand=True)
+    # heat_demand_ibpsa = import_demands_from_github()
+    heat_demand_demgen, cold_demand_demgen = import_demands_from_demgen(dir_sciebo, plot_demand=True)
 
     heat_demand = heat_demand_demgen
     cold_demand = cold_demand_demgen
-    dhw_demand = dhw_demand_pycity
+    dhw_demand = dhw_demand_dhwcalc
 
     max_heat_demand = max(heat_demand)
     max_cold_demand = max(cold_demand)
@@ -262,36 +262,64 @@ def main():
         'supply__T_coolingSet': [273.15 + 16],  # Set Temperature cold Pipe
         'supply__T_heatingSet': [273.15 + 22],  # Set Temperature hot Pipe
     }
-    params_dict_5g_heating_cooling_xiyuan = {
+    params_dict_5g_heating_cooling_xiyuan_study = {
         # ----------------------------------------- General/Graph Data -------------------------------------------------
         'graph__network_type': 'heating',
         'graph__t_nominal': [273.15 + 10],  # equals T_Ambient in Dymola? Start value for every pipe?
         'graph__p_nominal': [1e5],
         'model_ground': "t_ground_table",
-        'graph__t_ground': 273.15 + 10,
+        'graph__t_ground': [273.15 + 0, 273.15 + 10, 273.15 + 20],
         'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
         # ----------------- Pipe/Edge Data ----------------
         'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
         'edge__fac': 1.0,
-        'edge__roughness': 2.5e-5,  #
-        'edge__diameter': [0.1],  # Destest default: 0.02-0.05
-        'edge__length': 12,  # Destest default: 12-36
-        'edge__dIns': 0.004,  # Destest default: 0.045, Isolation Thickness
-        'edge__kIns': 0.0035,  # Destest default: 0.035, U-Value
+        'edge__roughness': 2.5e-5,
         # -------------------------- Demand/House Node Data ----------------------------
         'model_demand': aixlib_dhc + "Demands.ClosedLoop.PumpControlledwithHP_v4_ze_jonas",  # 5GDHC
-
         'demand__heat_input': heat_demand,
+        'input_heat_str': 'heat_input',
         'demand__cold_input': cold_demand,
         'demand__dhw_input': dhw_demand,
         'demand__T_supplyHeating': [273.15 + 30],  # T_VL Heizung
         'demand__T_supplyCooling': [273.15 + 12],  # T_VL Kühlung
+        'demand__dT_Network': [4, 10, 25],
         'demand__heatDemand_max': max_heat_demand,
         'demand__coolingDemand_max': max_cold_demand,
 
         # ------------------------------ Supply Node Data --------------------------
         'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPump',
-        'supply__TIn': 273.15 + 20,  # -> t_supply
+        'supply__TIn': [273.15 + 5, 273.15 + 20, 273.15 + 40],  # -> t_supply
+        # 'supply__t_return': 273.15 + 10,    # should be equal to demand__t_return!
+        'supply__dpIn': [5e5],  # p_supply
+        # 'supply__p_return': 2e5,
+        'supply__m_flow_nominal': [2],
+    }
+    params_dict_5g_heating_cooling_xiyuan_single = {
+        # ----------------------------------------- General/Graph Data -------------------------------------------------
+        'graph__network_type': 'heating',
+        'graph__t_nominal': [273.15 + 10],  # equals T_Ambient in Dymola? Start value for every pipe?
+        'graph__p_nominal': [1e5],
+        'model_ground': "t_ground_table",
+        'graph__t_ground': [273.15 + 10],
+        'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
+        # ----------------- Pipe/Edge Data ----------------
+        'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
+        'edge__fac': 1.0,
+        'edge__roughness': 2.5e-5,
+        # -------------------------- Demand/House Node Data ----------------------------
+        'model_demand': aixlib_dhc + "Demands.ClosedLoop.PumpControlledwithHP_v4_ze_jonas",  # 5GDHC
+        'demand__heat_input': heat_demand,
+        'input_heat_str': 'heat_input',
+        'demand__cold_input': cold_demand,
+        'demand__dhw_input': dhw_demand,
+        'demand__T_dhw_supply': [273.15 + 65],  # T_VL DHW
+        'demand__dT_Network': [10],
+        'demand__heatDemand_max': max_heat_demand,
+        # 'demand__coolingDemand_max': max_cold_demand,
+
+        # ------------------------------ Supply Node Data --------------------------
+        'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPump',
+        'supply__TIn': [273.15 + 20],  # -> t_supply
         # 'supply__t_return': 273.15 + 10,    # should be equal to demand__t_return!
         'supply__dpIn': [5e5],  # p_supply
         # 'supply__p_return': 2e5,
@@ -334,10 +362,10 @@ def main():
     }
 
     # ---------------------------------------- create Simulations ----------------------------------------------
-    parameter_study(params_dict_5g_heating_cooling, dir_sciebo)
+    parameter_study(params_dict_5g_heating_cooling_xiyuan_single, dir_sciebo)
 
 
-def generate_dhw_profile_pycity():
+def generate_dhw_profile_pycity(plot_demand=False):
     """
     from https://github.com/RWTH-EBC/pyCity
     Problem: a lot of parameters, every time a different dhw profile
@@ -363,9 +391,10 @@ def generate_dhw_profile_pycity():
         occupancy=occupancy.occupancy)  # Occupancy profile (600 sec resolution)
     dhw_demand = dhw_obj.loadcurve  # ndarray with 8760 timesteps in Watt
 
-    plt.plot(dhw_demand)
-    plt.ylabel('dhw pycity, sum={:.2f}'.format(sum(dhw_demand)/1000))
-    plt.show()
+    if plot_demand:
+        plt.plot(dhw_demand)
+        plt.ylabel('dhw pycity, sum={:.2f}'.format(sum(dhw_demand) / 1000))
+        plt.show()
 
     return dhw_demand
 
@@ -396,53 +425,65 @@ def import_demands_from_github(compute_cold=False):
         return heat_demand, cold_demand
 
 
-def import_from_dhwcalc():
-    """DHWcalc yields Volume Flow TimeSeries (in Liters per hour).
-    To get Energyflows, we have to multiply by rho, cp and dt
-    Q = V * rho * cp * dt"""
+def import_from_dhwcalc(dir_sciebo, delta_t_dhw=35, plot_demand=False):
+    """
+    DHWcalc yields Volume Flow TimeSeries (in Liters per hour) for 8760 hourly steps.
+    To get Energyflows, we have to multiply by rho, cp and dt. -> Q = Vdot * rho * cp * dt
+    :return: dhw_demand:    time series. each hourly timestep contains the Energydemand in Watthours -> Wh/1h
+    """
 
-    if platform.system() == 'Darwin':
-        dhw_profile = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/demand_profiles/" \
-                      "DHW_default_8760_200l_stepFunctionforMonths/DHW0001_DHW.txt"
-    elif platform.system() == 'Windows':
-        dhw_profile = ''
-    else:
-        raise Exception("Unknown operating system")
+    dhw_file_in_sciebo = "/demand_profiles/DHWcalc/DHW_default_8760_200l_stepFunctionforMonths/DHW0001_DHW.txt"
+    dhw_profile = dir_sciebo + dhw_file_in_sciebo
 
     dhw_demand_LperH = [int(word.strip('\n')) for word in open(dhw_profile).readlines()]
     dhw_demand_LperH = [round(x, 1) for x in dhw_demand_LperH]
 
-    plt.plot(dhw_demand_LperH)
-    plt.ylabel('dhw DHWcalc LperH')
-    plt.show()
+    joule_in_Wh = 1/3600   # 1J = 1Ws = 1Wh/3600
+    rho = 1  # 1L =0.001m^3 = 1kg for Water
+    cp = 4180  # J/kgK
+    dt = delta_t_dhw  # K
 
-    rho = 1/3600     # 1L/h = 1/3600 kg/s
-    cp = 4180       # J/kgK
-    dt = 35         # K
-    dhw_demand = [x*rho*cp*dt for x in dhw_demand_LperH]
+    dhw_demand = [x * rho * cp * dt * joule_in_Wh for x in dhw_demand_LperH]    # in Wh
+    yearly_dhw_energy_demand = sum(dhw_demand)/1000     # in kWh
+    print("Yearly DHW energy demand from DHWcalc is {:.2f} kWh".format(yearly_dhw_energy_demand))
 
-    plt.plot(dhw_demand)
-    plt.ylabel('dhw DHWcalc, sum={:.2f}'.format(sum(dhw_demand)/1000))
-    plt.show()
+    if plot_demand:
+        plt.plot(dhw_demand)
+        plt.ylabel('dhw DHWcalc kWh, sum={:.2f}'.format(yearly_dhw_energy_demand))
+        plt.show()
 
-    return dhw_demand
+    return dhw_demand   # in Wh
 
 
-def import_demands_from_txt_file():
-    # files from EON.EBC DemGen. 8760 time steps in Watts [W]
+def import_demands_from_demgen(dir_sciebo, plot_demand=False):
+    # files from EON.EBC DemGen. 8760 time steps in [Wh]
     # Calculate your own demands at http://demgen.testinstanz.os-cloud.eonerc.rwth-aachen.de/
-    heat_demand_file = '/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/' \
-                       'demand_profiles/Heat_demand_Berlin_200qm_SingleFamilyHouse_SIA_standard_Values.txt'
-    cold_demand_file = '/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/' \
-                       'demand_profiles/Cool_demand_Berlin_200qm_SingleFamilyHouse_SIA_standard_Values.txt'
 
-    # import txt file to numpy n array
+    heat_profile_file = '/demand_profiles/DemGen/Heat_demand_Berlin_200qm_SingleFamilyHouse_SIA_standard_Values.txt'
+    cold_profile_file = '/demand_profiles/DemGen/Cool_demand_Berlin_200qm_SingleFamilyHouse_SIA_standard_Values.txt'
+    heat_demand_file = dir_sciebo + heat_profile_file
+    cold_demand_file = dir_sciebo + cold_profile_file
+
+    # import txt file to numpy array
     heat_demand_np = np.loadtxt(heat_demand_file)
     cold_demand_np = np.loadtxt(cold_demand_file)
 
     # demand is rounded to 1 digit for better readability and converted to a list object
-    heat_demand = [round(x, 1) for x in heat_demand_np]
-    cold_demand = [round(x, 1) for x in cold_demand_np]
+    heat_demand = [round(x, 1) for x in heat_demand_np]     # in Wh
+    cold_demand = [round(x, 1) for x in cold_demand_np]     # in Wh
+
+    yearly_heat_demand = sum(heat_demand) / 1000    # in kWh
+    print("Yearly heat energy demand from DemGen is {:.2f} kWh".format(yearly_heat_demand))
+    yearly_cold_demand = sum(cold_demand) / 1000    # in kWh
+    print("Yearly cold energy demand from DemGen is {:.2f} kWh".format(yearly_cold_demand))
+
+    if plot_demand:
+        plt.plot(heat_demand)
+        plt.ylabel('heat demand, sum={:.2f}'.format(yearly_cold_demand))
+        plt.show()
+        plt.plot(cold_demand)
+        plt.ylabel('heat demand, sum={:.2f}'.format(yearly_cold_demand))
+        plt.show()
 
     return heat_demand, cold_demand
 
@@ -504,8 +545,8 @@ def parameter_study(params_dict, dir_sciebo):
 
 def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
     """
-    "Defines a building node dictionary and adds it to the graph. Adds network nodes to the graph and creates
-    a district heating network graph. Creates a Modelica Model of the Graph and saves it to dir_sciebo."
+    Defines a building node dictionary and adds it to the graph. Adds network nodes to the graph and creates
+    a district heating network graph. Creates a Modelica Model of the Graph and saves it to dir_sciebo.
     :param params_dict: dictionary:         simulation parameters and their initial values
     :param dir_sciebo:  string:             path of the sciebo folder
     :param save_params_to_csv: boolean:    defines if parameter dict is saved to csv for later analysis
@@ -573,24 +614,24 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
                     simple_district.nodes[bldg][params_dict_key.replace('supply__', '')] = params_dict[params_dict_key]
 
     # ----------------------------------------- Pipe/Edge Data -------------------------------------------------------
-    # # pipe data has the beginning and ending node, Length, Diameter, thickness, peak load, pressure loss, U-value
-    # pipe_data = pd.read_csv('Pipe_data.csv', sep=',')
-    # pipe_data = pipe_data.replace(to_replace='i', value='Destest_Supply')  # rename node 'i' to 'Destest_Supply'
-    #
-    # # Add Diameter[m], Length[m], Insulation Thickness[m] and U-Value [W/mK] to edges/pipes
-    # for index, row in pipe_data.iterrows():
-    #     simple_district.edges[
-    #         simple_district.nodes_by_name[row['Beginning Node']],
-    #         simple_district.nodes_by_name[row['Ending Node']]]['diameter'] = row['Inner Diameter [m]'] * 20
-    #     simple_district.edges[
-    #         simple_district.nodes_by_name[row['Beginning Node']],
-    #         simple_district.nodes_by_name[row['Ending Node']]]['length'] = row['Length [m]']
-    #     simple_district.edges[
-    #         simple_district.nodes_by_name[row['Beginning Node']],
-    #         simple_district.nodes_by_name[row['Ending Node']]]['dIns'] = row['Insulation Thickness [m]'] / 10
-    #     simple_district.edges[
-    #         simple_district.nodes_by_name[row['Beginning Node']],
-    #         simple_district.nodes_by_name[row['Ending Node']]]['kIns'] = row['U-value [W/mK]']
+    # pipe data has the beginning and ending node, Length, Diameter, thickness, peak load, pressure loss, U-value
+    pipe_data = pd.read_csv('Pipe_data.csv', sep=',')
+    pipe_data = pipe_data.replace(to_replace='i', value='Destest_Supply')  # rename node 'i' to 'Destest_Supply'
+
+    # Add Diameter[m], Length[m], Insulation Thickness[m] and U-Value [W/mK] to edges/pipes
+    for index, row in pipe_data.iterrows():
+        simple_district.edges[
+            simple_district.nodes_by_name[row['Beginning Node']],
+            simple_district.nodes_by_name[row['Ending Node']]]['diameter'] = row['Inner Diameter [m]']
+        simple_district.edges[
+            simple_district.nodes_by_name[row['Beginning Node']],
+            simple_district.nodes_by_name[row['Ending Node']]]['length'] = row['Length [m]']
+        simple_district.edges[
+            simple_district.nodes_by_name[row['Beginning Node']],
+            simple_district.nodes_by_name[row['Ending Node']]]['dIns'] = row['Insulation Thickness [m]']
+        simple_district.edges[
+            simple_district.nodes_by_name[row['Beginning Node']],
+            simple_district.nodes_by_name[row['Ending Node']]]['kIns'] = row['U-value [W/mK]']
 
     for edge in simple_district.edges():
         simple_district.edges[edge[0], edge[1]]['name'] = str(edge[0]) + 'to' + str(edge[1])
@@ -603,7 +644,7 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
 
     # write m_flow_nominal to the graphs edges with uesgraph function
     sysmod_utils.estimate_m_flow_nominal(graph=simple_district, dT_design=10,
-                                         network_type='heating', input_heat_str='heat_input')
+                                         network_type='heating', input_heat_str=params_dict['input_heat_str'])
 
     # --------------- Visualization, Save  ----------------
     vis = ug.Visuals(simple_district)  # Plotting / Visualization with pipe diameters scaling
@@ -643,8 +684,8 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
     assert not save_name[0].isdigit(), "Model name cannot start with a digit"
 
     new_model = sysmh.SystemModelHeating(network_type=simple_district.graph["network_type"])
-    new_model.stop_time = 365 * 24 * 3600
-    new_model.timestep = 600
+    new_model.stop_time = 365 * 24 * 1
+    new_model.timestep = 1
     new_model.import_from_uesgraph(simple_district)
     new_model.set_connection(remove_network_nodes=True)
 
