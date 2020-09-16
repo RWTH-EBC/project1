@@ -11,98 +11,117 @@ from PIL import Image
 def main():
     # paths
     if platform.system() == 'Darwin':
-        dir_models = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/models"
-        dir_output = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/plots"
-        master_csv = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/overview_files/master.csv"
+        dir_sciebo = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data"
     elif platform.system() == 'Windows':
-        dir_models = "/mma-jgr/sciebo-folder/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/models"
-        dir_output = "/mma-jgr/sciebo-folder/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/plots"
-        master_csv = "/mma-jgr/sciebo-folder/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data/overview_files/master.csv"
+        dir_sciebo = "D:/mma-jgr/sciebo-folder/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data"
     else:
         raise Exception("Unknown operating system")
+    dir_models = dir_sciebo + "/models"
+    dir_output = dir_sciebo + "/plots"
+    master_csv = dir_sciebo + "/overview_files/master.csv"
+    study_csv = dir_sciebo + "/models/study.csv"
 
     # saving all variables names to a list
-    all_vars_lst = read_trajectory_names_folder(res_dir=dir_models)
+    # only makes sense if all the simulations have the same variables!
+    # this is not the case when looking into different supply/demand/pipe models!
+    all_vars_lst = read_trajectory_names_folder(res_dir=dir_models, only_from_first_sim=True)
 
     # making sublists
-    sublists = {}
-    add_to_sublists(sublists, 'Mass Flow Supply Pipes', all_vars_lst, "senMasFlo.m_flow", "pipe", "R")
-    add_to_sublists(sublists, 'Mass Flow Return Pipes', all_vars_lst, "senMasFlo.m_flow", "R", "")
-    add_to_sublists(sublists, 'Supply and Return Temperatures', all_vars_lst, "senT", ".T", "")
-    add_to_sublists(sublists, 'Supply Variables', all_vars_lst, "networkModel.supply")
-    add_to_sublists(sublists, 'Electrical Power Demand Heatpump', all_vars_lst, 'heaPum.P')
+    all_sublists = {}
+    add_to_sublists(all_sublists, 'Mass Flow Supply Pipes', all_vars_lst, "senMasFlo.m_flow", "pipe", "R")
+    add_to_sublists(all_sublists, 'Mass Flow Return Pipes', all_vars_lst, "senMasFlo.m_flow", "R", "")
+    add_to_sublists(all_sublists, 'Supply and Return Temperatures', all_vars_lst, "senT", ".T", "")
+    add_to_sublists(all_sublists, 'Supply Variables', all_vars_lst, "networkModel.supply")
+    add_to_sublists(all_sublists, 'Electrical Power Demand Heatpump', all_vars_lst, 'heaPum.P')
+    add_to_sublists(all_sublists, 'Return Temp Substations', all_vars_lst, 'del1.T')
 
     # converting the mat files to dataframes
     res_dict = mat_files_filtered_to_dict(res_dir=dir_models, var_lst=all_vars_lst)
 
-    # streamlit dashboard
+    # streamlit dashboard, print map of destest
     st.sidebar.title("Data Selection for Destest")
-
-    selected_sublist_description = st.sidebar.radio(label="Choose which sublist of variables to plot",
-                                                    options=list(sublists.keys()))
-    selected_plot_style = st.sidebar.radio(label="Choose which plotstyle tu use",
-                                           options=['Single Simulation', 'Single Variable'])
-
     destest_map = Image.open('/Users/jonasgrossmann/git_repos/project1/wp_3_2_destest/Network/NetworkSizing'
                              '/uesgraph_destest_16_selfsized_jonas.png')
     st.image(destest_map, caption='Destest Network Layout', use_column_width=True)
 
-    for option in list(sublists.keys()):
-        if option == selected_sublist_description:
+    # choose a sublist of variables from all the sublists inside the all_sublists dictionary
+    selected_sublist_description = st.sidebar.radio(label="Choose which sublist of variables to plot",
+                                                    options=list(all_sublists.keys()))
+
+    # choose a plot style
+    selected_plot_style = st.sidebar.radio(label="Choose which plotstyle tu use",
+                                           options=['Single Simulation', 'Single Variable'])
+
+    # choose a Variable inside the selected sublist of variables
+    selected_variable_from_sublist = st.sidebar.multiselect(
+        label="If you chose to plot a single Variable per Plot, choose which variable to plot from the chosen sublist",
+        options=all_sublists[selected_sublist_description])
+
+    # choose a Simulation from the res_dict
+    selected_simulation_from_sublist = st.sidebar.multiselect(
+        label="If you chose to plot a single simulation per Plot, choose which simulation to plot",
+        options=list(res_dict.keys()),
+        default=list(res_dict.keys()))
+
+    # loop through all sublists, find the selected one and print it
+    for sublist_description in list(all_sublists.keys()):
+        if sublist_description == selected_sublist_description:
             st.write("The selected sublist contains the following variables:")
-            st.write(sublists[option])
-            for plotstyle in ['Single Simulation', 'Single Variable']:
+            st.write(all_sublists[sublist_description])
 
-                if plotstyle == 'Single Variable':
-                    selected_variable_from_sublist = st.sidebar.multiselect(
-                        label="If you chose to plot a single Variable per Plot, "
-                              "choose which variable to plot from the chosen sublist", options=sublists[option])
-                    plot_lst = []
-                    for var in sublists[option]:
-                        if var == selected_variable_from_sublist:
-                            plot_lst.append(selected_variable_from_sublist)
-                    fig_lst = plot_from_df_looped(res_dict, dir_output, plot_style=plotstyle, var_lst=plot_lst,
-                                                  master_csv=master_csv, y_label=option)
-                    for fig in fig_lst:
-                        st.pyplot(fig)
+    # One Plot displays one Single Variable, one line is one simulation -> Dymola can't do this
+    if selected_plot_style == 'Single Variable':
+        vars_to_plot = []
+        for var in all_sublists[selected_sublist_description]:
+            if var == selected_variable_from_sublist:
+                vars_to_plot.append(selected_variable_from_sublist)
+        fig_lst = plot_from_df_looped(res_dict, dir_output, plot_style='Single Variable', var_lst=vars_to_plot,
+                                      study_csv=study_csv, y_label=selected_sublist_description)
+        for fig in fig_lst:
+            st.pyplot(fig)
 
-                if plotstyle == 'Single Simulation':
-                    selected_simulation_from_sublist = st.sidebar.multiselect(
-                        label="If you chose to plot a single simulation per Plot, "
-                              "choose which simulation to plot", options=list(res_dict.keys()),
-                        default=list(res_dict.keys()))
-                    plot_sim_dict = {}
-                    for sim in list(res_dict.keys()):
-                        if sim in selected_simulation_from_sublist:
-                            plot_sim_dict.update({sim: res_dict[sim]})
-                    fig_lst = plot_from_df_looped(plot_sim_dict, dir_output, plot_style=plotstyle,
-                                                  var_lst=sublists[option], master_csv=master_csv, y_label=option)
-                    for fig in fig_lst:
-                        st.pyplot(fig)
+    # One Plot displays one Single Simulation, one line is one variable -> Dymola can do this, too
+    if selected_plot_style == 'Single Simulation':
+        plot_sim_dict = {}
+        for sim in list(res_dict.keys()):
+            if sim in selected_simulation_from_sublist:
+                plot_sim_dict.update({sim: res_dict[sim]})
+        fig_lst = plot_from_df_looped(plot_sim_dict, dir_output, plot_style="Single Simulation",
+                                      var_lst=all_sublists[selected_sublist_description], study_csv=study_csv,
+                                      y_label=selected_sublist_description)
+        for fig in fig_lst:
+            st.pyplot(fig)
 
 
-def read_trajectory_names_folder(res_dir, print_all_trajectories=False):
+def read_trajectory_names_folder(res_dir, only_from_first_sim):
     """
     Takes the .mat file from the result path and saves it as a SimRes Instance. Then, all variable names that are
     considered trajectories are saved in a list. A trajectory is considered a variable which has more than two values,
     or the values are not equal. The 'get_trajectories' function exists only in the EBC branch of the ModelicaRes
     package.
-    :param print_all_trajectories:
+    :param only_from_first_sim: decide if you want to take the trajectory names only from the first simulation of a
+                                parameter study or of all simulations. It makes sense to take the trajectories of all
+                                simulations, if the variable names change. For example, when using different substation
+                                or supply models within the same simulation study.
     :param res_dir:
     :return all_trajectories_lst:   list:   names of all variables that are trajectories
         """
     res_all_lst = find("*.mat", res_dir)
-    res_path = res_all_lst[0]
 
-    print("Converting the .mat File to a SimRes instance to get the variable names ...")
-    sim = SimRes(fname=res_path)
-    all_trajectories_lst = sim.get_trajectories()  # all_trajectory_names is a list of variables that are trajectories.
-
-    if not print_all_trajectories:
-        print("There are " + str(len(all_trajectories_lst)) + " variables in the results file.")
+    if only_from_first_sim:
+        res_path = res_all_lst[0]
+        print("Converting one .mat File to a SimRes instance to get the variable names ...")
+        sim = SimRes(fname=res_path)
+        all_trajectories_lst = sim.get_trajectories()  # all_trajectory_names is list of variables that are trajectories
+        print("There are " + str(len(all_trajectories_lst)) + " variables in the first results file.")
     else:
-        print("There are " + str(len(all_trajectories_lst)) + " variables in the results file:"
-              + str(all_trajectories_lst))
+        all_trajectories_lst = []
+        print("Converting the .mat Files to SimRes instances to get all variable names ...")
+        for res_path in res_all_lst:
+            sim = SimRes(fname=res_path)
+            sim_trajectories_lst = sim.get_trajectories()
+            all_trajectories_lst.extend(sim_trajectories_lst)
+        all_trajectories_lst = list(set(all_trajectories_lst))  # drops duplicates
 
     return all_trajectories_lst
 
@@ -114,6 +133,7 @@ def find(pattern, path):
     :param path:
     :return:
     """
+
     results = []
 
     if not os.path.isdir(path):
@@ -181,8 +201,8 @@ def add_to_sublists(master_sublists_dict, description, input_var_lst, sig1="", s
     return {description: sublist}
 
 
-@st.cache(persist=True)
-def matfile_to_df(res_path, var_lst):
+# @st.cache(persist=True)
+def matfile_to_df(res_path, var_lst, output_interval="hours"):
     """
     Takes the .mat file from the result path and saves it as a SimRes Instance. The variables given in the var_lst list
     are then converted to a pandas dataframe.   (... further explanation ...) The dataframe is then returned.
@@ -200,20 +220,25 @@ def matfile_to_df(res_path, var_lst):
     res_df = sim.to_pandas(var_lst, with_unit=False)
 
     res_df = res_df.groupby(res_df.index).first()
-    res_df = res_df[res_df.index.isin(range(0, 31536000, 900))]
 
-    res_df.index = res_df.index.astype(int)
-    res_df.index = pd.to_datetime(res_df.index, unit="s", origin="2019")
-
+    if output_interval == "seconds":
+        res_df = res_df[res_df.index.isin(range(0, 31536000, 900))]
+        res_df.index = res_df.index.astype(int)
+        res_df.index = pd.to_datetime(res_df.index, unit="s", origin="2019")
+    elif output_interval == "hours":
+        res_df = res_df[res_df.index.isin(range(0, 8760, 1))]
+        res_df.index = res_df.index.astype(int)
+        # res_df.index = pd.to_datetime(res_df.index, unit="h", origin="2019") #-> to_datetime has no Unit "Hour"
+        res_df.index = pd.Timestamp('2019-01-01') + pd.to_timedelta(res_df.index, unit='H')
     return res_df
 
 
-@st.cache(persist=True)
+# @st.cache(persist=True)
 def mat_files_filtered_to_dict(res_dir, var_lst, savename_append="", save_to_csv=False):
     """
-    Imports results with 'matfile_to_df' function. Then converts the dataframe to a csv.
+    Imports results with 'matfile_to_df' function. Optionally converts the dataframe to a csv.
     Adds the dataframe with the corresponding Result path to a dictionary. (This might be useful if multiple result
-    fields are analysed at once?)
+    fields are analysed at once)
     :param res_dir: str:            Path to the results directory
     :param var_lst: list:           variables to import from result file
     :param savename_append: str:    name to append to the csv title
@@ -235,42 +260,44 @@ def mat_files_filtered_to_dict(res_dir, var_lst, savename_append="", save_to_csv
     return res_dict
 
 
-def find_changing_vars_from_parameter_study(master_csv, res_dict):
+def find_changing_var_from_parameter_study(study_csv, res_dict):
     """
-    Takes the master.csv and converts it into a dataframe. 
-    :param master_csv:
+    Takes the study.csv and converts it into a dataframe.
+    Then finds the parameter that is changing inside the parameter study and returns it
+    :param study_csv:
     :param res_dict:
     :return:
     """
 
-    master_df = pd.read_csv(master_csv, index_col=0)
-    master_indexes = list(master_df.index.values)
+    study_df = pd.read_csv(study_csv, index_col=0)
+    study_indexes = list(study_df.index.values)
     sim_names = list(res_dict.keys())
     if len(sim_names) <= 1:
         raise Exception("Please pass more than one simulation to the 'plot_from_df_looped' function or use the"
                         "single plot function")
-    sim_names_to_drop = [x for x in master_indexes if x not in sim_names]
-    master_df = master_df.drop(index=sim_names_to_drop)  # drop all sims of master.csv, that are'nt inside res_dict
-    master_df = master_df[[i for i in master_df if len(set(master_df[i])) > 1]]
-    master_df_reduced = master_df.dropna(axis=1, how="any")
-    var0 = master_df.columns[0]
+    sim_names_to_drop = [x for x in study_indexes if x not in sim_names]
+    study_df = study_df.drop(index=sim_names_to_drop)  # drop all sims of master.csv, that are'nt inside res_dict
+    study_df = study_df[[i for i in study_df if len(set(study_df[i])) > 1]]
+    study_df_reduced = study_df.dropna(axis=1, how="any")
+    var0 = study_df.columns[0]
 
-    return master_df_reduced, var0
+    return var0, study_df_reduced
 
 
-def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, master_csv, savename_append='',
+def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, study_csv, savename_append='',
                         save_figs=False):
     """
 
     Creates a Matplotlib figure and plots the variables in 'var_lst'. Saves the figure in 'dir_output'
 
-    :param master_csv:
+    :param study_csv:                   Path where the overview file of the simulation study is stored
     :param plot_style: str              plot style 1: one figure plots all variables of a single simulation
                                         plot style 2: one figure plots a single variable of all simulations
     :param res_dict: dictionary         dictionary that holds the Simulation names as keys and the corresponding
                                         variable data as a dataframe as values
     :param y_label: string
-    :param var_lst: list
+    :param var_lst: list                list of variables you want to plot
+                                        -> should be formed with the "add_to_sublists" function
     :param dir_output: String:          path to output directory
     :param savename_append: String:     Name to save the figures
     :param save_figs: Boolean:          decision to save figures to pdf and png
@@ -278,23 +305,13 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, mast
     """
     fig_lst = []  # for return statement
 
-    master_df = pd.read_csv(master_csv, index_col=0)
-    master_indexes = list(master_df.index.values)
-    sim_names = list(res_dict.keys())
-    if len(sim_names) <= 1:
-        raise Exception("Please pass more than one simulation to the 'plot_from_df_looped' function or use the"
-                        "single plot function")
-    sim_names_to_drop = [x for x in master_indexes if x not in sim_names]
-    master_df = master_df.drop(index=sim_names_to_drop)     # drop all sims of master.csv, that are'nt inside res_dict
-    master_df = master_df[[i for i in master_df if len(set(master_df[i])) > 1]]
-    master_df = master_df.dropna(axis=1, how="any")
-    var0 = master_df.columns[0]
+    var0, study_df = find_changing_var_from_parameter_study(study_csv, res_dict)
 
     if plot_style == 'Single Simulation':  # Single Simulation, one line is one variable
         for sim_name in res_dict.keys():
 
             fig, ax = plt.subplots()
-            sim_title = str(var0) + " = " + str(master_df.at[sim_name, var0])
+            sim_title = str(var0) + " = " + str(study_df.at[sim_name, var0])
             fig.suptitle(sim_title, fontsize=18)
             lines = []
 
@@ -337,24 +354,12 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, mast
             fig.suptitle(var_title, fontsize=12)
             lines = []
 
-            # take master_csv and reduce it down to the inspected Simulations and the variable that changes (and is
-            # therefore part of a simulation study). This is useful for  naming  the plotted lines.
-            master_df = pd.read_csv(master_csv, index_col=0)
-            master_indexes = list(master_df.index.values)
-            sim_names = res_dict.keys()
-            sim_names_to_drop = [x for x in master_indexes if x not in sim_names]
-            master_df = master_df.drop(index=sim_names_to_drop)
-            master_df = master_df[[i for i in master_df if len(set(master_df[i])) > 1]]
-            master_df = master_df.dropna(axis=1, how="any")
-            var0 = master_df.columns[0]
-
             for sim_name in res_dict.keys():
-                val0 = master_df._get_value(sim_name, var0)
+                val0 = study_df.loc[sim_name][var0]
+                # val1 = study_df._get_value(sim_name, var0)
                 line = ax.plot(res_dict[sim_name][var].resample("D").mean(), linewidth=0.7,
                                label=str(var0) + ' = ' + str(val0))
                 lines += line
-
-            # for sim_name in
 
             ax.set_ylabel(y_label)
             ax.set_xlabel("Time in Date")
