@@ -34,10 +34,12 @@ def main():
         raise Exception("Unknown operating system")
 
     # ------------------------------------ demand profiles---------------------------------------------
+    ground_temps = import_ground_temp_table(dir_sciebo, plot_series=False)
+
     # dhw_demand_pycity = generate_dhw_profile_pycity()
-    dhw_demand_dhwcalc = import_from_dhwcalc(dir_sciebo, plot_demand=True)
+    dhw_demand_dhwcalc = import_from_dhwcalc(dir_sciebo, plot_demand=False)
     # heat_demand_ibpsa = import_demands_from_github()
-    heat_demand_demgen, cold_demand_demgen = import_demands_from_demgen(dir_sciebo, plot_demand=True)
+    heat_demand_demgen, cold_demand_demgen = import_demands_from_demgen(dir_sciebo, plot_demand=False)
 
     heat_demand = heat_demand_demgen
     cold_demand = cold_demand_demgen
@@ -262,45 +264,13 @@ def main():
         'supply__T_coolingSet': [273.15 + 16],  # Set Temperature cold Pipe
         'supply__T_heatingSet': [273.15 + 22],  # Set Temperature hot Pipe
     }
-    params_dict_5g_heating_cooling_xiyuan_study = {
-        # ----------------------------------------- General/Graph Data -------------------------------------------------
-        'graph__network_type': 'heating',
-        'graph__t_nominal': [273.15 + 10],  # equals T_Ambient in Dymola? Start value for every pipe?
-        'graph__p_nominal': [1e5],
-        'model_ground': "t_ground_table",
-        'graph__t_ground': [273.15 + 0, 273.15 + 10, 273.15 + 20],
-        'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
-        # ----------------- Pipe/Edge Data ----------------
-        'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
-        'edge__fac': 1.0,
-        'edge__roughness': 2.5e-5,
-        # -------------------------- Demand/House Node Data ----------------------------
-        'model_demand': aixlib_dhc + "Demands.ClosedLoop.PumpControlledwithHP_v4_ze_jonas",  # 5GDHC
-        'demand__heat_input': heat_demand,
-        'input_heat_str': 'heat_input',
-        'demand__cold_input': cold_demand,
-        'demand__dhw_input': dhw_demand,
-        'demand__T_supplyHeating': [273.15 + 30],  # T_VL Heizung
-        'demand__T_supplyCooling': [273.15 + 12],  # T_VL Kühlung
-        'demand__dT_Network': [4, 10, 25],
-        'demand__heatDemand_max': max_heat_demand,
-        'demand__coolingDemand_max': max_cold_demand,
-
-        # ------------------------------ Supply Node Data --------------------------
-        'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPump',
-        'supply__TIn': [273.15 + 5, 273.15 + 20, 273.15 + 40],  # -> t_supply
-        # 'supply__t_return': 273.15 + 10,    # should be equal to demand__t_return!
-        'supply__dpIn': [5e5],  # p_supply
-        # 'supply__p_return': 2e5,
-        'supply__m_flow_nominal': [2],
-    }
     params_dict_5g_heating_cooling_xiyuan_single = {
         # ----------------------------------------- General/Graph Data -------------------------------------------------
         'graph__network_type': 'heating',
         'graph__t_nominal': [273.15 + 10],  # equals T_Ambient in Dymola? Start value for every pipe?
         'graph__p_nominal': [1e5],
         'model_ground': "t_ground_table",
-        'graph__t_ground': [273.15 + 10],
+        'graph__t_ground': ground_temps,
         'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
         # ----------------- Pipe/Edge Data ----------------
         'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
@@ -324,6 +294,37 @@ def main():
         'supply__dpIn': [5e5],  # p_supply
         # 'supply__p_return': 2e5,
         'supply__m_flow_nominal': [2],
+    }
+    params_dict_5g_heating_cooling_xiyuan_study = {
+        # ----------------------------------------- General/Graph Data -------------------------------------------------
+        'graph__network_type': 'heating',
+        'graph__t_nominal': [273.15 + 5, 273.15 + 10, 273.15 + 15, 273.15 + 20],  # equals T_Ambient in Dymola? Start value for every pipe?
+        'graph__p_nominal': [1e5],
+        'model_ground': "t_ground_table",
+        'graph__t_ground': ground_temps,
+        'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
+        # ----------------- Pipe/Edge Data ----------------
+        'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
+        'edge__fac': 1.0,
+        'edge__roughness': 2.5e-5,
+        # -------------------------- Demand/House Node Data ----------------------------
+        'model_demand': aixlib_dhc + "Demands.ClosedLoop.PumpControlledwithHP_v4_ze_jonas",  # 5GDHC
+        'demand__heat_input': heat_demand,
+        'input_heat_str': 'heat_input',
+        'demand__cold_input': cold_demand,
+        'demand__dhw_input': dhw_demand,
+        'demand__T_dhw_supply': [273.15 + 65],  # T_VL DHW
+        'demand__dT_Network': [10],
+        'demand__heatDemand_max': max_heat_demand,
+        # 'demand__coolingDemand_max': max_cold_demand,
+
+        # ------------------------------ Supply Node Data --------------------------
+        'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPump',
+        'supply__TIn': [273.15 + 15],  # -> t_supply
+        # 'supply__t_return': 273.15 + 10,    # should be equal to demand__t_return!
+        'supply__dpIn': [5e5, 2e5],  # p_supply
+        # 'supply__p_return': 2e5,
+        'supply__m_flow_nominal': [1, 2],
     }
 
     params_dict_5g_heating_micha = {
@@ -362,7 +363,7 @@ def main():
     }
 
     # ---------------------------------------- create Simulations ----------------------------------------------
-    parameter_study(params_dict_5g_heating_cooling_xiyuan_single, dir_sciebo)
+    parameter_study(params_dict_5g_heating_cooling_xiyuan_study, dir_sciebo)
 
 
 def generate_dhw_profile_pycity(plot_demand=False):
@@ -423,6 +424,35 @@ def import_demands_from_github(compute_cold=False):
         return heat_demand
     else:
         return heat_demand, cold_demand
+
+
+def import_ground_temp_table(dir_sciebo, plot_series=False):
+    """
+    Imports the ground Temperature file from the DWD. Data can be found at
+    https://cdc.dwd.de/rest/metadata/station/html/812300083047
+    :param dir_sciebo: sciebo folder where the data is stored
+    :param plot_series: decide if you want to plot the temperature series
+    :return: return the series as a list object
+    """
+
+    ground_temp_file = "/demand_profiles/Soil_Temperatures/Berlin_Tempelhof_ID433/csv/data/data_TE100_MN002.csv"
+    path_temp_file = dir_sciebo + ground_temp_file
+
+    ground_temps_csv_df = pd.read_csv(path_temp_file, sep=',', index_col="Zeitstempel")
+
+    ground_temps_df = ground_temps_csv_df[["Wert"]]
+    ground_temps_np = ground_temps_df["Wert"].values  # mane numpy nd array
+    ground_temps_lst = [round(x, 1) for x in ground_temps_np]  # this demand is rounded to 1 digit for better readability
+    mean_temp = sum(ground_temps_lst) / len(ground_temps_lst)
+
+    if plot_series:
+        plt.plot(ground_temps_lst)
+        plt.ylabel('Mean Yearly Temperature = {:.2f}'.format(mean_temp))
+        plt.show()
+
+    ground_temps_lst = [273.15 + temp for temp in ground_temps_np]  # convert to Kelvin
+
+    return ground_temps_lst
 
 
 def import_from_dhwcalc(dir_sciebo, delta_t_dhw=35, plot_demand=False):
@@ -623,6 +653,9 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
         simple_district.edges[
             simple_district.nodes_by_name[row['Beginning Node']],
             simple_district.nodes_by_name[row['Ending Node']]]['diameter'] = row['Inner Diameter [m]']
+        simple_district.edges[
+            simple_district.nodes_by_name[row['Beginning Node']],
+            simple_district.nodes_by_name[row['Ending Node']]]['dh'] = row['Inner Diameter [m]']
         simple_district.edges[
             simple_district.nodes_by_name[row['Beginning Node']],
             simple_district.nodes_by_name[row['Ending Node']]]['length'] = row['Length [m]']
