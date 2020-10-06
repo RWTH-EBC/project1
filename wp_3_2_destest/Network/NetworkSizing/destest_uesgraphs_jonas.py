@@ -45,6 +45,8 @@ def main():
     cold_demand = cold_demand_demgen
     dhw_demand = dhw_demand_dhwcalc
 
+    convert_dhw_load_to_storage_load(dhw_demand)
+
     max_heat_demand = max(heat_demand)
     max_cold_demand = max(cold_demand)
 
@@ -298,16 +300,16 @@ def main():
     params_dict_5g_heating_cooling_xiyuan_study = {
         # ----------------------------------------- General/Graph Data -------------------------------------------------
         'graph__network_type': 'heating',
-        'graph__t_nominal': [273.15 + 5, 273.15 + 10, 273.15 + 15, 273.15 + 20],  # equals T_Ambient in Dymola? Start value for every pipe?
+        'graph__t_nominal': [273.15 + 2.5, 273.15 + 5, 273.15 + 11.14],  # Start value for every pipe? Water Properties?
         'graph__p_nominal': [1e5],
         'model_ground': "t_ground_table",
         'graph__t_ground': ground_temps,
         'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
-        # ----------------- Pipe/Edge Data ----------------
+        # ------------------------------------------ Pipe/Edge Data -----------------------------------
         'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
         'edge__fac': 1.0,
         'edge__roughness': 2.5e-5,
-        # -------------------------- Demand/House Node Data ----------------------------
+        # ------------------------------------ Demand/House Node Data ---------------------------------
         'model_demand': aixlib_dhc + "Demands.ClosedLoop.PumpControlledwithHP_v4_ze_jonas",  # 5GDHC
         'demand__heat_input': heat_demand,
         'input_heat_str': 'heat_input',
@@ -317,14 +319,20 @@ def main():
         'demand__dT_Network': [10],
         'demand__heatDemand_max': max_heat_demand,
         # 'demand__coolingDemand_max': max_cold_demand,
-
-        # ------------------------------ Supply Node Data --------------------------
+        # ------------------------------------- Supply Node Data ----------------------------------------
         'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPump',
-        'supply__TIn': [273.15 + 15],  # -> t_supply
+        'supply__TIn': [273.15 + 15, 273.15 + 20],  # -> t_supply
         # 'supply__t_return': 273.15 + 10,    # should be equal to demand__t_return!
-        'supply__dpIn': [5e5, 2e5],  # p_supply
+        'supply__dpIn': [4e5],  # p_supply -> set wth 'pressure_control'?
         # 'supply__p_return': 2e5,
-        'supply__m_flow_nominal': [1, 2],
+        # 'supply__m_flow_nominal': [1, 2],
+        # ------------------------------------ Pressure Control ------------------------------------------
+        "pressure_control_supply": "Destest_Supply",    # Name of the supply that controls the pressure
+        "pressure_control_dp": 0.5e5,   # Pressure difference to be held at reference building
+        "pressure_control_building": "max_distance",    # reference building for the network
+        "pressure_control_p_max": [4e5, 2e5],  # Maximum pressure allowed for the pressure controller
+        "pressure_control_k": 12,   # gain of controller
+        "pressure_control_ti": 5,   # time constant for integrator block
     }
 
     params_dict_5g_heating_micha = {
@@ -364,6 +372,124 @@ def main():
 
     # ---------------------------------------- create Simulations ----------------------------------------------
     parameter_study(params_dict_5g_heating_cooling_xiyuan_study, dir_sciebo)
+
+
+def convert_dhw_load_to_storage_load(dhw_demand, dhw_demand_Unit='Wh', s_step=3600, plot_demand=True):
+    """
+    Converts the input DHW-Profile without a DHW-Storage to a DHW-Profile with a DHW-Storage.
+    The output profile looks as if the HP would not supply the DHW-load directly but would rather re-heat
+    the DHW-Storage, which has dropped below a certain dT Threshold.
+    :return:
+    """
+
+    # ---- convert the DHW demand from the input Unit to Joule -----
+    if dhw_demand_Unit == 'Wh':
+        conversion_factor = 3600    # Wh to J
+    elif dhw_demand_Unit == 'J':
+        conversion_factor = 1
+    else:
+        raise Exception("Unknown DHW Time Series Unit. Please add a conversion factor for your Unit or change it")
+    dhw_demand = [dem_step * conversion_factor for dem_step in dhw_demand]
+
+    # --------- Storage Data ---------------
+    # Todo: get parameters from DIN
+    V_stor = 1000   # Storage Volume in Liters
+    rho = 1         # Liters to Kilograms
+    m_w = V_stor * rho  # Mass Water in Storage
+    c_p = 4180  # Heat Capacity Water in [J/kgK]
+    dT = 50
+    Q_full = m_w * c_p * dT
+
+    dT_threshhold = 5   # max Temp Drop [K] in Storage
+    dQ_threshhold = m_w * c_p * dT_threshhold
+    Qcon_flow_max = 5000   # Heat flow rate in [W] of the HP in Storage-Heating Mode
+
+    t_dQ = dQ_threshhold/Qcon_flow_max  # time needed to increase storage Temp by
+    t_dQ_h = t_dQ/s_step  # convert from seconds to hours
+
+    timesteps = round(t_dQ_h-0.5)  # -> round 5K-time to lower integer value
+
+    Q_dh_timesteps = dQ_threshhold * (timesteps/t_dQ_h)     # energy added to Storage in the rounded 5K-time
+    Q_dh_timesteps2 = Qcon_flow_max * timesteps * s_step      # just another way to compute it
+    Q_dh_timestep = Qcon_flow_max * s_step    # energy added in 1 timestep
+
+    # ---------- write new time series --------
+    dQ_track = 0    # tracks the cumulative dhw demand until the Temp falls more than 5K.
+    storage_load = []   # new time series
+    above_dT_threshhold = True
+
+    for t_step, dem_step in enumerate(dhw_demand, start=0):
+
+        # for initial condition, when storage_load is still empty
+        if len(storage_load) == 0:
+            dQ_track = dQ_track + dem_step
+        else:
+            dQ_track = dQ_track - storage_load[t_step - 1] + dem_step
+
+        if above_dT_threshhold:
+            if dQ_track <= Q_dh_timesteps:
+                storage_load.append(0)
+            else:
+                above_dT_threshhold = False
+                if dQ_track >= Q_dh_timestep:
+                    storage_load.append(Q_dh_timestep)
+                else:
+                    storage_load.append(0)
+            continue
+        else:
+            if dQ_track >= Q_dh_timestep:
+                storage_load.append(Q_dh_timestep)
+            else:
+                storage_load.append(0)
+                above_dT_threshhold = True
+
+    # print out total demands and Difference between them
+    print("Total DHW Demand is {:.2f} kWh".format(sum(dhw_demand)/(3600*1000)))
+    print("Total Storage Demand is {:.2f} kWh".format(sum(storage_load) / (3600 * 1000)))
+    diff = sum(dhw_demand) - sum(storage_load)
+    print("Difference between dhw demand and storage load ist {:.2f} kWh".format(diff/(3600*1000)))
+    if diff < 0:
+        raise Exception("More heat than dhw demand is added to the storage!")
+
+    # Count number of clusters of non-zero values ("peaks") -> reduces the amount of HP mode switches!
+    dhw_peaks = int(np.diff(np.concatenate([[0], dhw_demand, [0]]) == 0).sum() / 2)
+    stor_peaks = int(np.diff(np.concatenate([[0], storage_load, [0]]) == 0).sum() / 2)
+    print("The Storage reduced the number of DHW heating periods from {} to {}".format(dhw_peaks, stor_peaks))
+
+    # Summenlinien
+    dhw_demand_sumline = []
+    acc_dem = 0
+    for dem_step in dhw_demand:
+        acc_dem += dem_step
+        dhw_demand_sumline.append(acc_dem)
+    storage_load_sumline = []
+    acc_load = 0
+    for stor_step in storage_load:
+        acc_load += stor_step
+        storage_load_sumline.append(acc_load)
+    storage_load_sumline = [Q + Q_full for Q in storage_load_sumline]
+
+    # add Difference to the Last 0 Entry of the Time Series -> Sum of demands is the same then
+    fill_last_zero_index_with_demand_diff = False
+    if fill_last_zero_index_with_demand_diff:
+        last_zero_index = None
+        for idx, item in enumerate(reversed(storage_load), start=0):
+            if item == 0:
+                last_zero_index = idx
+        storage_load[last_zero_index] += diff
+
+    # plot Summenlinien
+    if plot_demand:
+        plt.plot([dem_step/(3600*1000) for dem_step in dhw_demand_sumline])
+        plt.plot([stor_step/(3600*1000) for stor_step in storage_load_sumline])
+        plt.ylabel('storage load and dhw demand in kWh')
+        plt.title('Bedarfs ({} Peaks) und Versorgungskennliene ({} Peaks)'.format(dhw_peaks, stor_peaks))
+        plt.show()
+
+    # Input Unit of DHW demand should be equal to Output Unit of DHW demand
+    storage_load = [stor_step/conversion_factor for stor_step in storage_load]
+
+    return storage_load
 
 
 def generate_dhw_profile_pycity(plot_demand=False):
@@ -679,6 +805,23 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
     sysmod_utils.estimate_m_flow_nominal(graph=simple_district, dT_design=10,
                                          network_type='heating', input_heat_str=params_dict['input_heat_str'])
 
+    # get the maximum m_flow_nominal from the edges (set by the estimate_m_flow_nominal function)
+    m_flow_nominal_max = 0
+    for edge in simple_district.edges():
+        m_flow_nominal_edge = simple_district.edges[edge[0], edge[1]]["m_flow_nominal"]
+
+        if m_flow_nominal_edge > m_flow_nominal_max:
+            m_flow_nominal_max = m_flow_nominal_edge
+
+    # write m_flow_nominal to the supply
+    # Todo: no support for multiple supplies yet
+    pipes_from_supply = 2
+    safety_factor = 1.5
+    m_flow_nominal_supply = m_flow_nominal_max * pipes_from_supply * safety_factor
+    for bldg in simple_district.nodelist_building:
+        if simple_district.nodes[bldg]['is_supply_heating']:
+            simple_district.nodes[bldg]["m_flow_nominal"] = m_flow_nominal_supply
+
     # --------------- Visualization, Save  ----------------
     vis = ug.Visuals(simple_district)  # Plotting / Visualization with pipe diameters scaling
     vis.show_network(
@@ -696,23 +839,6 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
     save_name = "Destest_Jonas_{}".format(datetime.now().strftime('%Y_%m_%d_%H_%M_%S'))  # for unique naming
     dir_model = os.path.join(dir_models_sciebo, save_name)
 
-    # creates a return network, creates a model from SystemModelHeating, sets the demand, supply, pipe etc. models
-    # sysmod_utils.create_model(
-    #     name=save_name,
-    #     save_at=dir_models_sciebo,
-    #     graph=simple_district,
-    #     stop_time=365 * 24 * 3600,
-    #     timestep=600,
-    #     model_supply=params_dict['model_supply'],
-    #     model_demand=params_dict['model_demand'],
-    #     model_pipe=params_dict['model_pipe'],
-    #     model_medium=params_dict['model_medium'],
-    #     model_ground=params_dict['model_ground'],
-    #     T_nominal=params_dict['graph__t_nominal'],
-    #     p_nominal=params_dict['graph__p_nominal'],
-    #     t_ground_prescribed=params_dict['graph__t_ground']
-    # )
-
     # ------------modified create_model function, default is part of sysmod_utils -------------
     assert not save_name[0].isdigit(), "Model name cannot start with a digit"
 
@@ -727,6 +853,16 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
     new_model.medium_building = params_dict['model_medium']
     new_model.T_nominal = params_dict['graph__t_nominal']
     new_model.p_nominal = params_dict['graph__p_nominal']
+
+    new_model.set_control_pressure(
+        name_supply=params_dict['pressure_control_supply'],
+        dp=params_dict['pressure_control_dp'],
+        name_building=params_dict['pressure_control_building'],
+        p_max=params_dict['pressure_control_p_max'],
+        k=params_dict['pressure_control_k'],
+        ti=params_dict['pressure_control_ti'],
+    )
+
     new_model.ground_model = "t_ground_table"
     new_model.graph["T_ground"] = params_dict['graph__t_ground']
     new_model.tolerance = 1e-5
