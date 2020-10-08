@@ -1,6 +1,9 @@
 import pandas as pd
 import os
+from pathlib import Path
+import shutil
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import seaborn as sns
 import streamlit as st
 from modelicares import SimRes
@@ -19,31 +22,35 @@ def main():
         raise Exception("Unknown operating system")
     dir_models = dir_sciebo + "/models"
     dir_output = dir_sciebo + "/plots"
-    master_csv = dir_sciebo + "/overview_files/master.csv"
-    study_csv = dir_sciebo + "/models/study.csv"
 
-    # saving all variables names to a list
-    # only makes sense if all the simulations have the same variables!
-    # this is not the case when looking into different supply/demand/pipe models!
+    changing_vars, study_df_reduced = reduce_and_update_study_df(dir_models)
+
+    # --------------------- get a list of all variables --------------------------
     all_vars_lst = read_trajectory_names_folder(res_dir=dir_models, only_from_first_sim=True)
 
-    # ----------------------- making sublists -----------------------
+    # ---------------------------- making sublists ----------------------------
     all_sublists = {}
-    add_to_sublists(all_sublists, 'Mass Flow Supply Pipes', all_vars_lst, "senMasFlo.m_flow", "pipe", "R")
-    add_to_sublists(all_sublists, 'Mass Flow Return Pipes', all_vars_lst, "senMasFlo.m_flow", "R", "")
-    add_to_sublists(all_sublists, 'Supply and Return Temperatures', all_vars_lst, "senT", ".T", "")
-    add_to_sublists(all_sublists, 'Supply Variables', all_vars_lst, "networkModel.supply")
-    add_to_sublists(all_sublists, 'Electrical Power Demand Heatpump', all_vars_lst, 'heaPum.P')
+    # add_to_sublists(all_sublists, 'Mass Flow Supply Pipes', all_vars_lst, "senMasFlo.m_flow", "pipe", "R")
+    # add_to_sublists(all_sublists, 'Mass Flow Return Pipes', all_vars_lst, "senMasFlo.m_flow", "R", "")
+    # add_to_sublists(all_sublists, 'Supply and Return Temperatures', all_vars_lst, "senT", ".T", "")
+    # add_to_sublists(all_sublists, 'Supply Variables', all_vars_lst, "networkModel.supply")
+    add_to_sublists(all_sublists, 'Electrical_Power_Demand_Heatpump', all_vars_lst, 'heaPum.P')
     add_to_sublists(all_sublists, 'Return_Temp_Substations_after_del', all_vars_lst, 'del1.T')
     add_to_sublists(all_sublists, 'Return_Temp_Substations_before_del', all_vars_lst, 'senTem_return.T')
     add_to_sublists(all_sublists, 'Pressure_Drop_Substations', all_vars_lst, 'dpOut')
+    add_to_sublists(all_sublists, 'Supply_Temp_Substation', all_vars_lst, 'senTem_supply.T')
     add_to_sublists(all_sublists, 'P_el_Substations', all_vars_lst, 'P_el')
     add_to_sublists(all_sublists, 'P_el_central_Pump', all_vars_lst, 'Supply.fan.P')
     add_to_sublists(all_sublists, 'P_el_central_heater', all_vars_lst, 'Supply.heater.Q_flow')
 
-    # ---------------------- converting the mat files to dataframes -----------------------
+    # ---------------------- converting the mat files to dataframes, takes long! -----------------------
     res_dict = mat_files_filtered_to_dict(res_dir=dir_models, var_lst=all_vars_lst)
-    changing_vars, study_df_reduced = find_changing_var_from_parameter_study(study_csv, res_dict)
+
+    # ------------------------------ test plotting ----------------------------------
+    fig_lst = plot_from_df_looped(res_dict, dir_output, var_lst=all_sublists['P_el_central_Pump'],
+                                  plot_style="Single Variable", dir_models=dir_models,
+                                  y_label='P_el_central_Pump', save_figs=True)
+    plt.show()
 
     # ------------------------------------------- Streamlit ------------------------------------------------------
     st.sidebar.title("Data Selection for Destest")
@@ -56,13 +63,12 @@ def main():
     # choose a sublist of variables
     selected_sublist_description = st.sidebar.radio(label="Choose which sublist of variables to plot",
                                                     options=list(all_sublists.keys()))
-
     # choose a plot style
-    selected_plot_style = st.sidebar.radio(label="Choose Plotstyle", options=['Single Simulation', 'Single Variable'])
+    selected_plot_style = st.sidebar.radio(label="Choose Plotstyle", options=['Single Variable', 'Single Simulation'])
 
     # choose Variables from selected sublist
     selected_variables_from_sublist = st.sidebar.multiselect(
-        label="If you chose to plot a single Variable per Plot, choose which variable to plot from the chosen sublist",
+        label="If you plot a single Variable per Plot, choose which variable to plot from the chosen sublist",
         options=all_sublists[selected_sublist_description],
         default=all_sublists[selected_sublist_description][-2:])
 
@@ -87,19 +93,15 @@ def main():
         dir_output=dir_output,
         plot_style=selected_plot_style,
         var_lst=selected_variables_from_sublist,
-        study_csv=study_csv,
-        y_label=selected_sublist_description)
+        dir_models=dir_models,
+        y_label=selected_sublist_description,
+        save_figs=False)
 
     for fig in fig_lst:
         st.pyplot(fig)
-    # ------------------------------ test plotting ----------------------------------
-    # fig_lst = plot_from_df_looped_sns(res_dict, dir_output, var_lst=all_sublists['P_el_Substations'],
-    #                               plot_style="Single Variable", study_csv=study_csv,
-    #                               y_label='P_el_Substations', save_figs=True)
-    # plt.show()
 
 
-def create_streamlit_dashboard_simple(all_sublists, res_dict, dir_output, study_csv):
+def create_streamlit_dashboard_simple(all_sublists, res_dict, dir_output, dir_models):
     """
     Creates a Streamlit Dashboard. Straemlit dashboards have to be started by the Terminal. To run streamlit,
     navigate inside the Terminal to the folder where this very file is stored, then enter
@@ -108,11 +110,10 @@ def create_streamlit_dashboard_simple(all_sublists, res_dict, dir_output, study_
     1) 'cau' -> conda activate uegraphs_py36
     2) 'stem' -> streamlit run D://...../Explore_matfile.py
 
-
     :param all_sublists:
     :param res_dict:
     :param dir_output:
-    :param study_csv:
+    :param dir_models:
     :return:
     """
     st.sidebar.title("Data Selection for Destest")
@@ -133,13 +134,13 @@ def create_streamlit_dashboard_simple(all_sublists, res_dict, dir_output, study_
     if selected_plot_style == 'Single Variable':
         vars_to_plot = selected_variables_from_sublist
         fig_lst = plot_from_df_looped_sns(res_dict, dir_output, plot_style="Single Variable", var_lst=vars_to_plot,
-                                          study_csv=study_csv, y_label=selected_sublist_description)
+                                          dir_models=dir_models, y_label=selected_sublist_description)
         for fig in fig_lst:
             plt.gcf()
             st.pyplot(fig)
 
 
-def create_streamlit_dashboard(all_sublists, res_dict, dir_output, study_csv):
+def create_streamlit_dashboard(all_sublists, res_dict, dir_output, dir_models):
     """
     Creates a Streamlit Dashboard. Straemlit dashboards have to be started by the Terminal. To run streamlit,
     navigate inside the Terminal to the folder where this very file is stored, then enter
@@ -148,11 +149,10 @@ def create_streamlit_dashboard(all_sublists, res_dict, dir_output, study_csv):
     1) 'cau' -> conda activate uegraphs_py36
     2) 'stem' -> streamlit run D://...../Explore_matfile.py
 
-
     :param all_sublists:
     :param res_dict:
     :param dir_output:
-    :param study_csv:
+    :param dir_models:
     :return:
     """
     st.sidebar.title("Data Selection for Destest")
@@ -185,7 +185,7 @@ def create_streamlit_dashboard(all_sublists, res_dict, dir_output, study_csv):
         if sim in selected_simulation_from_sublist:
             plot_res_dict.update({sim: res_dict[sim]})
 
-    changing_vars, study_df_reduced = find_changing_var_from_parameter_study(study_csv, res_dict)
+    study_df_reduced = reduce_and_update_study_df(dir_models)
 
     show_changing_vars = st.checkbox("Show changing variables")
     if show_changing_vars:
@@ -198,7 +198,7 @@ def create_streamlit_dashboard(all_sublists, res_dict, dir_output, study_csv):
         dir_output=dir_output,
         plot_style=selected_plot_style,
         var_lst=selected_variables_from_sublist,
-        study_csv=study_csv,
+        dir_models=dir_models,
         y_label=selected_sublist_description)
 
     for fig in fig_lst:
@@ -377,52 +377,93 @@ def mat_files_filtered_to_dict(res_dir, var_lst, savename_append="", save_to_csv
     return res_dict
 
 
-def find_changing_var_from_parameter_study(study_csv, res_dict):
+def reduce_and_update_study_df(dir_models, model_prefix="Destest_Jonas", update_csv_files=True):
     """
     Takes the study.csv and converts it into a dataframe.
-    Then finds the parameter that is changing inside the parameter study and returns it
-    :param study_csv:
-    :param res_dict:
+    Then finds the parameter that is changing inside the parameter study and returns it,
+    as well as a reduced version of the study.csv, which only contains the variable names that are changing.
+    :param dir_models:          csv that holds the simulation study info
+    :param model_prefix:        search string for the model names
+    :param update_csv_files:    decide to update the csv files after sims are deleted
     :return:
     """
+    dir_models = Path(dir_models)
+    study_csv = dir_models/"study.csv"
+    curr_study_csv = dir_models / "curr_study.csv"
 
+    # if theres no curr_study_csv yet, coply the study.csv
+    if not curr_study_csv.is_file():
+        shutil.copy(study_csv, curr_study_csv)
+
+    # study.csv was created from automated_network_simulation, should always stay the same!
     study_df = pd.read_csv(study_csv, index_col=0)
-    study_indexes = list(study_df.index.values)
-    sim_names = list(res_dict.keys())
-    if len(sim_names) <= 1:
-        raise Exception("Please pass more than one simulation to the 'plot_from_df_looped' function or use the"
-                        "single plot function")
-    sim_names_to_drop = [x for x in study_indexes if x not in sim_names]
-    study_df = study_df.drop(index=sim_names_to_drop)  # drop all sims of study.csv, that are'nt inside res_dict
-    study_df = study_df[[i for i in study_df if len(set(study_df[i])) > 1]]  # drops all columns with olny constants
-    study_df_reduced = study_df.dropna(axis=1, how="any")  # drops all columns with only NaN's
-    study_df_reduced = study_df_reduced.sort_index()    # sort for assigning short sim names in ascending order
+    sims_study_df = list(study_df.index.values)
 
-    changing_vars = []
-    for changing_var in study_df_reduced.columns:
-        changing_vars.append(changing_var)
+    curr_study_df = pd.read_csv(curr_study_csv, index_col=0)
+    sims_curr_study_df = list(curr_study_df.index.values)
 
-    short_sim_names_lst = ['Sim ' + str(x+1) for x in range(len(study_df_reduced.index))]   # make list [Sim 1, Sim 2..]
-    study_df_reduced['short_sim_name'] = short_sim_names_lst    # add list as a new column to the dataframe
+    # udate curr_study_df
 
-    # put short_sim_names in first column position
-    cols = ['short_sim_name'] + [col for col in study_df_reduced if col != 'short_sim_name']
-    study_df_reduced = study_df_reduced[cols]
+    # 1) remove sims from curr_study_df that are in curr_study_df but not in the folder
+    curr_sims = [child.name for child in dir_models.iterdir() if model_prefix in child.name]
+    sims_to_remove = [sim for sim in sims_curr_study_df if sim not in curr_sims]
+    curr_study_df = curr_study_df.drop(index=sims_to_remove)
 
-    # # link long sim names ('Destest_Jonas_2020 ...') to short ones ('Sim 3')
-    # short_sim_names_dict ={}
-    # for sim_idx, sim_name in enumerate(study_df.index, start=1):
-    #     short_sim_names_dict[sim_name] = 'Sim ' + str(sim_idx)
+    # 2) add sims to curr_study_df that are in the folder but not in curr_study_df,
+    # condition: they have to be in the original study_df
 
-    return changing_vars, study_df_reduced,  # short_sim_names_dict
+    # # all_deleted_sims = [sim for sim in all_sims if sim not in curr_sims]
+    # deleted_sims = [sim for sim in sims_study_df if sim not in sims_curr_study_df]
+    #
+    # if len(sims_curr_study_df) > len(curr_sims):
+    #     curr_study_df = curr_study_df.drop(index=deleted_sims)  # drop deleted sims
+    # elif len(sims_curr_study_df) < len(curr_sims):
+    #     pass
+    #     # Todo: re add re_added_sim with the info from the original study_df
+    #     # re_added_sims = [sim for sim in curr_sims if sim not in curr_sims_in_df]
+    #     # not_re_added_sim = [sim for sim in curr_sims if sim in curr_sims_in_df]
+    #     # re_added_df = study_df.drop(index=not_re_added_sim)
+    #     # curr_study_df = curr_study_df.append(re_added_df)
+
+    # reduce df: remove columns that have only constants
+    curr_study_df_reduced = reduce_df(curr_study_df)
+
+    # make list [Sim 1, Sim 2..], add it as a new column to the dataframe and put at first colum position
+    curr_study_df_reduced = curr_study_df_reduced.sort_index()  # for assigning short sim names in ascending order
+    short_sim_names = ['Sim ' + str(x + 1) for x in range(len(curr_study_df.index))]
+    curr_study_df_reduced['short_sim_name'] = short_sim_names
+    cols = ['short_sim_name'] + [col for col in curr_study_df_reduced if col != 'short_sim_name']
+    curr_study_df_reduced = curr_study_df_reduced[cols]
+
+    # save new and old version as csv files
+    curr_study_df_reduced.to_csv(dir_models/"curr_study.csv")
+
+    changing_vars = [var for var in curr_study_df_reduced.columns if 'short_sim_name' not in var]
+
+    return changing_vars, curr_study_df_reduced
 
 
-def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, study_csv, savename_append='',
+def reduce_df(input_df):
+    """
+    Takes a Dataframe and returns a reduced version, which only contains the columns where the variables are changing.
+    :param      input_df:           Dataframe that holds Simulation Names as indexes and variables as columns
+    :return:    input_df_reduced:   Dataframe, reduced number of columns
+    """
+    if len(input_df.index) <= 1:
+        raise Exception("Cant find changing vars from a Dataframe that only has one row")
+    input_df = input_df[[i for i in input_df if len(set(input_df[i])) > 1]]  # drop constant columns
+    input_df = input_df.dropna(axis=1, how="any")  # drops all columns with only NaN's
+    input_df_reduced = input_df.sort_index()    # sort for assigning short sim names in ascending order
+
+    return input_df_reduced
+
+
+def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, dir_models, savename_append='',
                         save_figs=False):
     """
     Creates a Matplotlib figure and plots the variables in 'var_lst'. Saves the figure in 'dir_output'
 
-    :param study_csv:                   Path where the overview file of the simulation study is stored
+    :param dir_models:                  Folder where the overview file of the simulation study is stored
     :param plot_style: str              plot style 1: one figure plots all variables of a single simulation
                                         plot style 2: one figure plots a single variable of all simulations
     :param res_dict: dictionary         dictionary that holds the Simulation names as keys and the corresponding
@@ -438,10 +479,11 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, stud
     """
     fig_lst = []  # for return statement
     plt.style.use("/Users/jonasgrossmann/git_repos/matplolib-style/ebc.paper.mplstyle")
-    changing_vars, study_df_reduced = find_changing_var_from_parameter_study(study_csv, res_dict)
+    sns.set()
+    sns.set_context("paper")
+    changing_vars, study_df_reduced = reduce_and_update_study_df(dir_models)
 
     # -------------- 1 Simulation per Plot, one line is one variable, this is what Dymola CAN do ----------------
-    # klappt
     if plot_style == 'Single Simulation':
         for sim_name in res_dict.keys():    # one sim per plot
 
@@ -453,7 +495,8 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, stud
             sim_title_short = study_df_reduced.at[sim_name, 'short_sim_name']
 
             fig, ax = plt.subplots()
-            fig.suptitle(sim_title_long + " = " + sim_title_short, fontsize=10)
+            # fig.suptitle(sim_title_long, y=1.1, fontsize=10)
+            plt.title(sim_title_short, fontsize=12, y=1)
             lines = []
 
             for var in var_lst:     # legend and line naming
@@ -467,10 +510,16 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, stud
                 line = ax.plot(res_dict[sim_name][var].resample("D").mean(), linewidth=0.7, label=var_title)
                 lines += line
 
-            ax.set_ylabel(y_label)
+            ax.set_ylabel(y_label.replace("_", " "))
             ax.set_xlabel("Time in Date")
+
+            date_form = mdates.DateFormatter('%b')
+            date_loc = mdates.MonthLocator()
+            ax.xaxis.set_major_formatter(date_form)
+            ax.xaxis.set_major_locator(date_loc)
+
             labs = [line.get_label() for line in lines]
-            ax.legend(lines, labs, loc="best", borderaxespad=0., ncol=2, fontsize=8)
+            ax.legend(lines, labs, loc="best", borderaxespad=0.2, ncol=1, fontsize=8)
             fig.autofmt_xdate(rotation=45, ha="center")
 
             fig_lst.append(fig)
@@ -495,7 +544,7 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, stud
             else:
                 var_title = str(var)
 
-            fig.suptitle(var_title, fontsize=12)
+            plt.title(var_title, fontsize=12, y=1)
             lines = []
 
             # this is for naming the legend and drawing the lines
@@ -512,10 +561,16 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, stud
                 line = ax.plot(res_dict[sim_name][var].resample("D").mean(), linewidth=0.7, label=line_label_short)
                 lines += line
 
-            ax.set_ylabel(y_label)
+            ax.set_ylabel(y_label.replace("_", " "))
             ax.set_xlabel("Time in Date")
+
+            date_form = mdates.DateFormatter('%b')
+            date_loc = mdates.MonthLocator()
+            ax.xaxis.set_major_formatter(date_form)
+            ax.xaxis.set_major_locator(date_loc)
+
             labs = [line.get_label() for line in lines]
-            ax.legend(lines, labs, loc="best", borderaxespad=0., ncol=2, fontsize=8)
+            ax.legend(lines, labs, loc="best", borderaxespad=0.5, ncol=2, fontsize=8)
             fig.autofmt_xdate(rotation=45, ha="center")
 
             fig_lst.append(fig)
@@ -529,12 +584,12 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, stud
     return fig_lst
 
 
-def plot_from_df_looped_sns(res_dict, dir_output, var_lst, y_label, plot_style, study_csv, savename_append='',
+def plot_from_df_looped_sns(res_dict, dir_output, var_lst, y_label, plot_style, dir_models, savename_append='',
                             save_figs=False):
     """
     Creates a Seaborn figure and plots the variables in 'var_lst'. Saves the figure in 'dir_output'
 
-    :param study_csv:                   Path where the overview file of the simulation study is stored
+    :param dir_models:                  Folder where the overview file of the simulation study is stored
     :param plot_style: str              plot style 1: one figure plots all variables of a single simulation
                                         plot style 2: one figure plots a single variable of all simulations
     :param res_dict: dictionary         dictionary that holds the Simulation names as keys and the corresponding
@@ -563,7 +618,7 @@ def plot_from_df_looped_sns(res_dict, dir_output, var_lst, y_label, plot_style, 
     sns.set()
     sns.set_context("paper", rc={"lines.linewidth": 0.5})  # style of the plot
     # sns.set_palette(sns.color_palette(eonerc_colors))     # eventually use costum colours?
-    changing_vars, study_df_reduced = find_changing_var_from_parameter_study(study_csv, res_dict)
+    changing_vars, study_df_reduced = reduce_and_update_study_df(dir_models)
 
     # -------------- 1 Simulation per Plot, one line is one variable, this is what Dymola CAN do ----------------
     if plot_style == 'Single Simulation':
@@ -660,10 +715,6 @@ def plot_from_df_looped_sns(res_dict, dir_output, var_lst, y_label, plot_style, 
                 # fig.savefig(os.path.join(dir_output, var + "_" + savename_append + ".png"), dpi=600)
 
     return fig_lst
-
-
-def master_plot(sims, vars):
-    return
 
 
 # unused function
