@@ -526,30 +526,54 @@ def generate_dhw_profile_pycity(plot_demand=False):
     return dhw_demand
 
 
-def import_demands_from_github(compute_cold=False):
-    # compute cold just swaps the heat time series from winter to summer
+def import_demands_from_github(compute_cold=False, plot_demand=False):
+    """
+    Imports the demand series from the IBPSA Project. The time intervall is 10mins (600secs),
+    therefore, the timeseries is 365*24*6 = 52560 elements long. The Unit is Watts [W].
+    :param compute_cold:    switch the heat demand from summer to winter to get a sort-of-cold-series
+    :param plot_demand:     plot the demand series for easy inspection
+    :return: return the heat (&cold) demand as a list object in [W]
+    """
     github_ibpsa_file = 'https://raw.githubusercontent.com/ibpsa/project1/master/wp_3_1_destest/' \
                         'Buildings/SimpleDistrict/Results/SimpleDistrict_IDEAS/SimpleDistrict_district.csv'
     demand_data = pd.read_csv(github_ibpsa_file, sep=';', index_col=0)  # first row (timesteps) is dataframe index
     demand_data.columns = demand_data.columns.str.replace(' / W', '')  # rename demand
 
-    heat_demand_df = demand_data[["SimpleDistrict_1"]]
-
-    half = int((len(heat_demand_df) - 1) / 2)  # half the length of the demand timeseries
-
-    cold_demand_df = heat_demand_df[half:].append(heat_demand_df[:half])  # shift demand by half a year
-    cold_demand_df.reset_index(inplace=True, drop=True)
-
-    heat_demand = heat_demand_df["SimpleDistrict_1"].values  # mane numpy nd array
-    cold_demand = cold_demand_df["SimpleDistrict_1"].values  # mane numpy nd array
-
+    heat_demand_df = demand_data[["SimpleDistrict_1"]]  # take demand from one house
+    heat_demand = heat_demand_df["SimpleDistrict_1"].values  # make numpy nd array
     heat_demand = [round(x, 1) for x in heat_demand]  # this demand is rounded to 1 digit for better readability
-    cold_demand = [round(x, 1) for x in cold_demand]  # this demand is rounded to 1 digit for better readability
 
-    if not compute_cold:
-        return heat_demand
-    else:
-        return heat_demand, cold_demand
+    yearly_heat_demand = sum(heat_demand)*600/(1000*3600)  # in kWh
+    average_heat_flow = (sum(heat_demand)/len(heat_demand))/1000
+    print("Yearly heat energy demand from IBPSA is {:.2f} kWh,"
+          "with an average of {:.2f} kW".format(yearly_heat_demand, average_heat_flow))
+
+    if plot_demand:
+        plt.plot([dem/1000 for dem in heat_demand])
+        plt.ylabel('heat demand in kW, sum={:.2f} kWh, av={:.2f} kW'.format(yearly_heat_demand, average_heat_flow))
+        plt.show()
+
+    return_series = heat_demand
+
+    if compute_cold:
+        half = int((len(heat_demand_df) - 1) / 2)  # half the length of the demand timeseries
+
+        cold_demand_df = heat_demand_df[half:].append(heat_demand_df[:half])  # shift demand by half a year
+        cold_demand_df.reset_index(inplace=True, drop=True)
+        cold_demand = cold_demand_df["SimpleDistrict_1"].values  # mane numpy nd array
+        cold_demand = [round(x, 1) for x in cold_demand]  # this demand is rounded to 1 digit for better readability
+
+        yearly_cold_demand = sum(cold_demand) / 1000  # in kWh
+        print("Yearly cold energy demand from IBPSA is {:.2f} kWh".format(yearly_cold_demand))
+
+        if plot_demand:
+            plt.plot(cold_demand)
+            plt.ylabel('heat demand, sum={:.2f}'.format(yearly_cold_demand))
+            plt.show()
+
+        return_series = heat_demand, cold_demand
+
+    return return_series
 
 
 def import_ground_temp_table(dir_sciebo, plot_series=False):
