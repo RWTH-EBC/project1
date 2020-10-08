@@ -12,6 +12,9 @@ import itertools
 from sklearn.model_selection import ParameterGrid
 import sys
 import matplotlib.pyplot as plt
+from pathlib import Path
+import fnmatch
+import shutil
 
 import pycity_base.classes.demand.domestic_hot_water as dhw
 import pycity_base.classes.timer as time
@@ -52,224 +55,10 @@ def main():
 
     # ------------------------ Parameter Dictionaries to pass into parameter study function -------------------------
     aixlib_dhc = "AixLib.Fluid.DistrictHeatingCooling."
-    params_dict_testing = {
-        # 'variable': 'value',      # eventually needed for csv generation? pandas takes first entry as index
-        # ----------------- Pipe/Edge Data ----------------
-        'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',  # needs ground temperature?
-        # 'model_pipe': "AixLib.Fluid.FixedResistances.PlugFlowPipe",
-        # 'model_pipe': aixlib_dhc + 'Pipes.StaticPipe',
-        'fac': 1.0,
-        'roughness': 2.5e-5,
-        # ----------------------- General Node Data ---------------------
-        't_return': 273.15 + 35,  # function of T_supply and dT_design? -> redundant? no(!)
-        # -------------------------- Demand/House Node Data ----------------------------
-        # 'model_demand': aixlib_dhc + 'Demands.OpenLoop.VarTSupplyDpFixedTempDifferenceBypass',
-        # 'model_demand': aixlib_dhc + 'Demands.OpenLoop.HeatPumpCarnot',
-        # 'model_demand': aixlib_dhc + 'Demands.OpenLoop.VarTSupplyDp',  # aus E11
-        # 'model_demand': aixlib_dhc + "Demands.ClosedLoop.PumpControlledHeatPumpFixDeltaT",  # Erdeis
-        'model_demand': aixlib_dhc + "Demands.ClosedLoop.ValveControlledHeatPumpFixDeltaT",
-        'dT_design': 10,
-        't_nominal': 273.15 + 25,  # equals T_Ambient in Dymola? Start value for every pipe?
-        't_ground': 273.15 + 10,
-        'p_nominal': 5e5,
-        'm_flo_bypass': 0.0005,
-        'dT_building': 10,  # inside the buildings? necessary for heatpump demand models
-        'cop_nominal': 5.0,
-        't_supply_building': 273.15 + 40,  # should be higher than T condensator? necessary for heatpump demand models
-        't_con_nominal': 273.15 + 35,
-        't_eva_nominal': 273.15 + 10,  # should be around ground temp?
-        # 'dTEva_nominal': dTEva_nominal,
-        # 'dTCon_nominal': dTCon_nominal,
-        # ------------------------------ Supply Node Data --------------------------
-        # 'model_supply': aixlib_dhc + 'Supplies.OpenLoop.SourceIdeal',
-        'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPump',
-        # 'model_supply': aixlib_dhc + 'Supplies.OpenLoop.SourceIdealPump',
-        't_supply': 273.15 + 45,  # -> TIn in Modelica
-        'p_supply': 6e5,
-        'p_return': 2e5,
-        'm_flow_nominal_supply': 1.0,
-        # ---------- further create_model data ---------
-        'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
-        'model_ground': "t_ground_table",
-    }
-    params_dict_study_models = {
-        # 'variable': 'value',      # eventually needed for csv generation? pandas takes first entry as index
-        # ----------------- Pipe/Edge Data ----------------
-        'model_pipe': [
-            aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
-            "AixLib.Fluid.FixedResistances.PlugFlowPipe",
-            aixlib_dhc + 'Pipes.StaticPipe'
-        ],
-        'fac': 1.0,
-        'roughness': 2.5e-5,
-        # ----------------------- General Node Data ---------------------
-        't_return': 273.15 + 35,  # function of T_supply and dT_design? -> redundant? no(!)
-        # -------------------------- Demand/House Node Data ----------------------------
-        'model_demand': [
-            aixlib_dhc + "Demands.ClosedLoop.ValveControlledHeatPumpFixDeltaT",
-            aixlib_dhc + 'Demands.OpenLoop.VarTSupplyDpFixedTempDifferenceBypass',
-            aixlib_dhc + 'Demands.OpenLoop.HeatPumpCarnot',
-            aixlib_dhc + 'Demands.OpenLoop.VarTSupplyDp',  # aus E11
-            # aixlib_dhc + "Demands.ClosedLoop.PumpControlledHeatPumpFixDeltaT",  # Erdeis
-        ],
-        'dT_design': 10,
-        't_nominal': 273.15 + 25,  # equals T_Ambient in Dymola? Start value for every pipe?
-        't_ground': 273.15 + 10,
-        'p_nominal': 5e5,
-        'm_flo_bypass': 0.0005,
-        'dT_building': 10,  # inside the buildings? necessary for heatpump demand models
-        'cop_nominal': 5.0,
-        't_supply_building': 273.15 + 40,  # should be higher than T condensator? necessary for heatpump demand models
-        't_con_nominal': 273.15 + 35,
-        't_eva_nominal': 273.15 + 10,  # should be around ground temp?
-        # 'dTEva_nominal': dTEva_nominal,
-        # 'dTCon_nominal': dTCon_nominal,
-        # ------------------------------ Supply Node Data --------------------------
-        'model_supply': [
-            aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPump',
-            aixlib_dhc + 'Supplies.OpenLoop.SourceIdeal',
-            aixlib_dhc + 'Supplies.OpenLoop.SourceIdealPump'
-        ],
-        't_supply': 273.15 + 45,  # -> TIn in Modelica
-        'p_supply': 6e5,
-        'p_return': 2e5,
-        'm_flow_nominal_supply': 1.0,
-        # ---------- further create_model data ---------
-        'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
-        'model_ground': "t_ground_table",
-    }
-    params_dict_study1 = {
-        # 'variable': 'value',      # eventually needed for csv generation? pandas takes first entry as index
-        # ----------------- Pipe/Edge Data ----------------
-        'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',  # needs ground temperature?
-        # 'model_pipe': "AixLib.Fluid.FixedResistances.PlugFlowPipe",
-        # 'model_pipe': aixlib_dhc + 'Pipes.StaticPipe',
-        'fac': 1.0,
-        'roughness': 2.5e-5,
-        # ----------------------- General Node Data ---------------------
-        't_return': 273.15 + 35,  # function of T_supply and dT_design? -> redundant? no(!)
-        # -------------------------- Demand/House Node Data ----------------------------
-        # 'model_demand': aixlib_dhc + 'Demands.OpenLoop.VarTSupplyDpFixedTempDifferenceBypass',
-        # 'model_demand': aixlib_dhc + 'Demands.OpenLoop.HeatPumpCarnot',
-        # 'model_demand': aixlib_dhc + 'Demands.OpenLoop.VarTSupplyDp',  # aus E11
-        # 'model_demand': aixlib_dhc + "Demands.ClosedLoop.PumpControlledHeatPumpFixDeltaT",  # Erdeis
-        'model_demand': aixlib_dhc + "Demands.ClosedLoop.ValveControlledHeatPumpFixDeltaT",
-        'demand': heat_demand,
-        'dT_design': 10,
-        't_nominal': 273.15 + 25,  # equals T_Ambient in Dymola? Start value for every pipe?
-        't_ground': np.linspace(273.15 - 20.0, 273.15 + 40, 7),
-        # 't_ground': [273.15 - 20.0, 273.15 - 10.0, 273.15, 273.15 + 10, 273.15 + 20, 273.15 + 30, 273.15 + 40],
-        'p_nominal': 5e5,
-        'm_flo_bypass': 0.0005,
-        'dT_building': 10,  # inside the buildings? necessary for heatpump demand models
-        'cop_nominal': np.linspace(4, 6, 3),
-        # 'cop_nominal': [4, 5, 6],
-        't_supply_building': 273.15 + 40,  # should be higher than T condensator? necessary for heatpump demand models
-        't_con_nominal': 273.15 + 35,
-        't_eva_nominal': 273.15 + 10,  # should be around ground temp?
-        # 'dTEva_nominal': dTEva_nominal,
-        # 'dTCon_nominal': dTCon_nominal,
-        # ------------------------------ Supply Node Data --------------------------
-        # 'model_supply': aixlib_dhc + 'Supplies.OpenLoop.SourceIdeal',
-        'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPump',
-        # 'model_supply': aixlib_dhc + 'Supplies.OpenLoop.SourceIdealPump',
-        't_supply': np.linspace(273.15 + 20, 273.15 + 45, 6),  # -> TIn in Modelica
-        # 't_supply': [273.15 + 20, 273.15 + 25, 273.15 + 30, 273.15 + 35, 273.15 + 40, 273.15 + 45],  # TIn in Modelica
-        'p_supply': 6e5,
-        'p_return': 2e5,
-        'm_flow_nominal_supply': 1.0,
-        # ---------- further create_model data ---------
-        'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
-        'model_ground': "t_ground_table",
-    }
-
-    params_dict_5g_heating = {
-        # ----------------------------------------- General/Graph Data -------------------------------------------------
-        'graph__network_type': 'heating',
-        'graph__t_nominal': [273.15 + 10],  # equals T_Ambient in Dymola? Start value for every pipe?
-        'graph__p_nominal': [1e5],
-        'model_ground': "t_ground_table",
-        'graph__t_ground': 273.15 + 10,
-        'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
-        # ----------------- Pipe/Edge Data ----------------
-        'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
-        'edge__fac': 1.0,
-        'edge__roughness': 2.5e-5,  #
-        'edge__diameter': [0.1],  # Destest default: 0.02-0.05
-        'edge__length': 12,  # Destest default: 12-36
-        'edge__dIns': 0.04,  # Destest default: 0.045
-        'edge__kIns': 0.035,  # Destest default: 0.035, U-Value
-        # -------------------------- Demand/House Node Data ----------------------------
-        'model_demand': aixlib_dhc + "Demands.ClosedLoop.SubstationHeating",  # 5GDHC
-        'demand__heatDemand': heat_demand,
-        'demand__T_supplyHeatingSet': [273.15 + 30],  # T_VL Heizung
-        # 'demand__t_return': 273.15 + 10,    # should be equal to supply__t_return!
-        # 'demand__dT_design': [5, 10, 15, 20],    # needed for estimate_m_flow_nominal function
-        # 'demand__m_flo_bypass': 0.0005,
-        # 'demand__dT_building': 10,  # inside the buildings? necessary for heatpump demand models
-        # 'demand__cop_nominal': 5.0,
-        # 'demand__t_supply_building': 273.15 + 20,   # should be higher than Tcon? necessary for heatpump demand models
-        # 'demand__t_con_nominal': 273.15 + 15,
-        # 'demand__t_eva_nominal': 273.15 + 10,  # should be around ground temp?
-        # 'dTEva_nominal': dTEva_nominal,
-        # 'dTCon_nominal': dTCon_nominal,
-        'demand__heatDemand_max': max_heat_demand,
-        'demand__deltaT_heatingSet': [10],  # Templeraturspreizung der Heizung
-        'demand__deltaT_heatingGridSet': [6],  # Difference Hot and Cold Pipe
-        # ------------------------------ Supply Node Data --------------------------
-        'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlant',
-        # 'supply__TIn': 273.15 + 20,  # -> t_supply
-        # 'supply__t_return': 273.15 + 10,    # should be equal to demand__t_return!
-        # 'supply__dpIn': [6e5],    # p_supply
-        # 'supply__p_return': 2e5,
-        'supply__m_flow_nominal': [2],
-        'supply__T_coolingSet': [273.15 + 16],  # Set Temperature cold Pipe
-        'supply__T_heatingSet': [273.15 + 22],  # Set Temperature hot Pipe
-    }
-    params_dict_5g_heating_cooling = {
-        # ----------------------------------------- General/Graph Data -------------------------------------------------
-        'graph__network_type': 'heating',
-        'graph__t_nominal': [273.15 + 10],  # equals T_Ambient in Dymola? Start value for every pipe?
-        'graph__p_nominal': [1e5],
-        'model_ground': "t_ground_table",
-        'graph__t_ground': 273.15 + 10,
-        'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
-        # ----------------- Pipe/Edge Data ----------------
-        'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
-        'edge__fac': 1.0,
-        'edge__roughness': 2.5e-5,  #
-        'edge__diameter': [0.1],  # Destest default: 0.02-0.05
-        'edge__length': 12,  # Destest default: 12-36
-        'edge__dIns': 0.004,  # Destest default: 0.045, Isolation Thickness
-        'edge__kIns': 0.0035,  # Destest default: 0.035, U-Value
-        # -------------------------- Demand/House Node Data ----------------------------
-        'model_demand': aixlib_dhc + "Demands.ClosedLoop.SubstationHeatingCoolingVarDeltaT",  # 5GDHC
-        'demand__heatDemand': heat_demand,
-        'demand__coolingDemand': cold_demand,
-        'demand__T_supplyHeatingSet': [273.15 + 30],  # T_VL Heizung
-        'demand__T_supplyCoolingSet': [273.15 + 12],  # T_VL Kühlung
-        'demand__heatDemand_max': max_heat_demand,
-        'demand__coolingDemand_max': max_cold_demand,
-
-        'demand__deltaT_heatingSet': [5],  # Templeraturspreizung der Heizung
-        'demand__deltaT_coolingSet': [5],  # Templeraturspreizung der Kühlung
-
-        'demand__deltaT_heatingGridSet': [4],  # Difference Hot and Cold Pipe
-        'demand__deltaT_coolingGridSet': [4],  # Difference Cold and Hot Pipe ?????
-        # ------------------------------ Supply Node Data --------------------------
-        'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlant',
-        # 'supply__TIn': 273.15 + 20,  # -> t_supply
-        # 'supply__t_return': 273.15 + 10,    # should be equal to demand__t_return!
-        # 'supply__dpIn': [6e5],    # p_supply
-        # 'supply__p_return': 2e5,
-        'supply__m_flow_nominal': [2],
-        'supply__T_coolingSet': [273.15 + 16],  # Set Temperature cold Pipe
-        'supply__T_heatingSet': [273.15 + 22],  # Set Temperature hot Pipe
-    }
     params_dict_5g_heating_cooling_xiyuan_single = {
         # ----------------------------------------- General/Graph Data -------------------------------------------------
         'graph__network_type': 'heating',
-        'graph__t_nominal': [273.15 + 10],  # equals T_Ambient in Dymola? Start value for every pipe?
+        'graph__t_nominal': [273.15 + 11.14],  # Start value for every pipe? Water Properties?
         'graph__p_nominal': [1e5],
         'model_ground': "t_ground_table",
         'graph__t_ground': ground_temps,
@@ -278,8 +67,8 @@ def main():
         'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
         'edge__fac': 1.0,
         'edge__roughness': 2.5e-5,
-        # -------------------------- Demand/House Node Data ----------------------------
-        'model_demand': aixlib_dhc + "Demands.ClosedLoop.PumpControlledwithHP_v4_ze_jonas",  # 5GDHC
+        # ------------------------------------ Demand/House Node Data ---------------------------------
+        'model_demand': aixlib_dhc + "Demands.ClosedLoop.PumpControlledwithHP_v4_ze_jonas_new_cooling_control",  # 5GDHC
         'demand__heat_input': heat_demand,
         'input_heat_str': 'heat_input',
         'demand__cold_input': cold_demand,
@@ -295,12 +84,19 @@ def main():
         # 'supply__t_return': 273.15 + 10,    # should be equal to demand__t_return!
         'supply__dpIn': [5e5],  # p_supply
         # 'supply__p_return': 2e5,
-        'supply__m_flow_nominal': [2],
+        # 'supply__m_flow_nominal': [1, 2],
+        # ------------------------------------ Pressure Control ------------------------------------------
+        "pressure_control_supply": "Destest_Supply",  # Name of the supply that controls the pressure
+        "pressure_control_dp": 0.5e5,  # Pressure difference to be held at reference building
+        "pressure_control_building": "max_distance",  # reference building for the network
+        "pressure_control_p_max": [4e5],  # Maximum pressure allowed for the pressure controller
+        "pressure_control_k": 12,  # gain of controller
+        "pressure_control_ti": 5,  # time constant for integrator block
     }
     params_dict_5g_heating_cooling_xiyuan_study = {
         # ----------------------------------------- General/Graph Data -------------------------------------------------
         'graph__network_type': 'heating',
-        'graph__t_nominal': [273.15 + 2.5, 273.15 + 5, 273.15 + 11.14],  # Start value for every pipe? Water Properties?
+        'graph__t_nominal': [273.15 + 11.14],  # Start value for every pipe? Water Properties?
         'graph__p_nominal': [1e5],
         'model_ground': "t_ground_table",
         'graph__t_ground': ground_temps,
@@ -309,6 +105,9 @@ def main():
         'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
         'edge__fac': 1.0,
         'edge__roughness': 2.5e-5,
+        'edge__kIns': [0.002, 0.035],
+        'edge__dIns': [0.0025, 0.045],
+        'pipe_scaling_factor': [1, 4, 0.25],
         # ------------------------------------ Demand/House Node Data ---------------------------------
         'model_demand': aixlib_dhc + "Demands.ClosedLoop.PumpControlledwithHP_v4_ze_jonas",  # 5GDHC
         'demand__heat_input': heat_demand,
@@ -333,41 +132,6 @@ def main():
         "pressure_control_p_max": [4e5, 2e5],  # Maximum pressure allowed for the pressure controller
         "pressure_control_k": 12,   # gain of controller
         "pressure_control_ti": 5,   # time constant for integrator block
-    }
-
-    params_dict_5g_heating_micha = {
-        # ----------------------------------------- General/Graph Data -------------------------------------------------
-        'graph__network_type': 'heating',
-        'graph__t_nominal': [273.15 + 10],  # equals T_Ambient in Dymola? Start value for every pipe?
-        'graph__p_nominal': [1e5],
-        'model_ground': "t_ground_table",
-        'graph__t_ground': 273.15 + 10,
-        'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
-        # ----------------- Pipe/Edge Data ----------------
-        'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
-        'edge__fac': 1.0,
-        'edge__roughness': 2.5e-5,  #
-        'edge__diameter': [0.1],  # Destest default: 0.02-0.05
-        'edge__length': 12,  # Destest default: 12-36
-        'edge__dIns': 0.004,  # Destest default: 0.045
-        'edge__kIns': 0.0035,  # Destest default: 0.035, U-Value
-        # -------------------------- Demand/House Node Data ----------------------------
-        'model_demand': aixlib_dhc + "Demands.ClosedLoop.PumpControlledHeatPumpFixDeltaT",  # 5GDHC
-        'demand__Q_flow_input': heat_demand,
-        'demand__TSupplyBuilding': [273.15 + 30],  # T_VL Heizung
-        'demand__Q_flow_nominal': max_heat_demand,
-        'demand__TReturn': [18],  # Return Temp vom Netz??
-        'demand__dTDesign': [4],  # Difference Hot and Cold Pipe
-        'demand__dTBuilding': [5],  # Temperaturspreizung Heizung
-        # ------------------------------ Supply Node Data --------------------------
-        'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlant',
-        # 'supply__TIn': 273.15 + 20,  # -> t_supply
-        # 'supply__t_return': 273.15 + 10,    # should be equal to demand__t_return!
-        # 'supply__dpIn': [6e5],    # p_supply
-        # 'supply__p_return': 2e5,
-        'supply__m_flow_nominal': [2],
-        'supply__T_coolingSet': [273.15 + 18],  # Set Temperature cold Pipe
-        'supply__T_heatingSet': [273.15 + 22],  # Set Temperature hot Pipe
     }
 
     # ---------------------------------------- create Simulations ----------------------------------------------
@@ -668,6 +432,63 @@ def import_demands_from_demgen(dir_sciebo, plot_demand=False):
     return heat_demand, cold_demand
 
 
+def create_study_pre_csv(dir_sciebo):
+    dir_sciebo = Path(dir_sciebo)
+    dir_models = Path(dir_sciebo/'models')
+    study_pre_csv = Path(dir_models / 'study_pre.csv')
+    csv_files = find("*overview.csv", dir_models)
+    if len(csv_files) == 0:
+        raise Exception("No overview.csv files were found in the models folder")
+    else:
+        # if theres yet no study.csv, the first overview.csv from the models folder is copied and renamed to study.csv
+        if not study_pre_csv.is_file():
+            shutil.copy(csv_files[0], dir_models)
+            first_csv_name = Path(csv_files[0]).name
+            first_study_csv = Path(dir_models / first_csv_name)
+            first_study_csv.rename(study_pre_csv)
+            del csv_files[0]  # for not appending it again
+        else:
+            raise Exception("A study_pre.csv file was already found in the models folder."
+                            "Please clean your models folder before starting a new simulation study.")
+
+        study_pre_df = pd.read_csv(study_pre_csv, index_col=0)
+
+        for csv_file in csv_files:
+            overview_df = pd.read_csv(csv_file, index_col=0)
+            study_pre_df = pd.concat([study_pre_df, overview_df], axis='rows')
+            study_pre_df.drop_duplicates()
+            study_pre_df.sort_index(axis='index', ascending=False, inplace=True)
+
+        print(study_pre_df.head())
+        study_pre_df.to_csv(study_pre_csv)
+
+
+def find(pattern, path):
+    """
+    Finds files that match a pattern and return a list of all file paths
+    :param pattern:
+    :param path:
+    :return:
+    """
+
+    results = []
+
+    if not os.path.isdir(path):
+        error_message = "result directory {} doesn't exist! Please update path.".format(path)
+        raise Exception(error_message)
+
+    for root, dirs, files in os.walk(path):
+        for name in files:
+            if fnmatch.fnmatch(name, pattern):
+                results.append(os.path.join(root, name))
+
+    if not results:
+        print("No File found that contains '{pattern}' in result directory {path}" \
+              .format(pattern=pattern, path=path))
+
+    return results
+
+
 def parameter_study(params_dict, dir_sciebo):
     """
     Function that takes the params_dict and creates all possible combinations of dictionaries, depending on how many
@@ -719,6 +540,8 @@ def parameter_study(params_dict, dir_sciebo):
         final_dict = {**params_dict_cnsts, **params_dict_series, **combi_dict}
         # print(final_dict.keys)
         generate_model(params_dict=final_dict, dir_sciebo=dir_sciebo)
+
+    create_study_pre_csv(dir_sciebo)
 
     return len(param_grid)
 
@@ -802,19 +625,21 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
     for index, row in pipe_data.iterrows():
         simple_district.edges[
             simple_district.nodes_by_name[row['Beginning Node']],
-            simple_district.nodes_by_name[row['Ending Node']]]['diameter'] = row['Inner Diameter [m]']
+            simple_district.nodes_by_name[row['Ending Node']]]['diameter'] \
+            = row['Inner Diameter [m]'] * params_dict["pipe_scaling_factor"]
         simple_district.edges[
             simple_district.nodes_by_name[row['Beginning Node']],
-            simple_district.nodes_by_name[row['Ending Node']]]['dh'] = row['Inner Diameter [m]']
+            simple_district.nodes_by_name[row['Ending Node']]]['dh'] \
+            = row['Inner Diameter [m]'] * params_dict["pipe_scaling_factor"]
         simple_district.edges[
             simple_district.nodes_by_name[row['Beginning Node']],
             simple_district.nodes_by_name[row['Ending Node']]]['length'] = row['Length [m]']
-        simple_district.edges[
-            simple_district.nodes_by_name[row['Beginning Node']],
-            simple_district.nodes_by_name[row['Ending Node']]]['dIns'] = row['Insulation Thickness [m]']
-        simple_district.edges[
-            simple_district.nodes_by_name[row['Beginning Node']],
-            simple_district.nodes_by_name[row['Ending Node']]]['kIns'] = row['U-value [W/mK]']
+        # simple_district.edges[
+        #     simple_district.nodes_by_name[row['Beginning Node']],
+        #     simple_district.nodes_by_name[row['Ending Node']]]['dIns'] = row['Insulation Thickness [m]']
+        # simple_district.edges[
+        #     simple_district.nodes_by_name[row['Beginning Node']],
+        #     simple_district.nodes_by_name[row['Ending Node']]]['kIns'] = row['U-value [W/mK]']
 
     for edge in simple_district.edges():
         simple_district.edges[edge[0], edge[1]]['name'] = str(edge[0]) + 'to' + str(edge[1])
@@ -856,12 +681,12 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
         label_size=10,
         scaling_factor_diameter=100)
 
-    dir_models_sciebo = os.path.join(dir_sciebo, 'models')
-    if not os.path.exists(dir_models_sciebo):
-        os.mkdir(dir_models_sciebo)
+    dir_models = os.path.join(dir_sciebo, 'models')
+    if not os.path.exists(dir_models):
+        os.mkdir(dir_models)
 
     save_name = "Destest_Jonas_{}".format(datetime.now().strftime('%Y_%m_%d_%H_%M_%S'))  # for unique naming
-    dir_model = os.path.join(dir_models_sciebo, save_name)
+    dir_model = os.path.join(dir_models, save_name)
 
     # ------------modified create_model function, default is part of sysmod_utils -------------
     assert not save_name[0].isdigit(), "Model name cannot start with a digit"
@@ -903,7 +728,7 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
 
     name = save_name[0].upper() + save_name[1:]
     new_model.model_name = name
-    new_model.write_modelica_package(save_at=dir_models_sciebo)
+    new_model.write_modelica_package(save_at=dir_models)
     # ---------------------------- end create_model function ---------------------------------
 
     if save_params_to_csv:
