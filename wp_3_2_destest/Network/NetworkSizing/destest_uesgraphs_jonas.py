@@ -407,7 +407,7 @@ def import_from_dhwcalc(dir_sciebo, s_step=3600, delta_t_dhw=35, plot_demand=Fal
     return dhw_demand   # in W
 
 
-def import_demands_from_demgen(dir_sciebo, house_type='Standard', plot_demand=False):
+def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interval=3600, plot_demand=False):
     # files from EON.EBC DemGen. 8760 time steps in [W]
     # Calculate your own demands at http://demgen.testinstanz.os-cloud.eonerc.rwth-aachen.de/
 
@@ -451,6 +451,11 @@ def import_demands_from_demgen(dir_sciebo, house_type='Standard', plot_demand=Fa
         plt.plot(cold_demand)
         plt.ylabel('heat demand, sum={:.2f} kWh'.format(yearly_cold_demand))
         plt.show()
+
+    # stretch out the list to match a given output interval. F.e: [2,4] -> steps = 3 ->[2,2,2,4,4,4]
+    steps = 3600/output_interval
+    heat_demand = [[dem] * int(steps) for dem in heat_demand]   # list of lists
+    heat_demand = [dem for dem_step in heat_demand for dem in dem_step]
 
     return heat_demand, cold_demand     # in W
 
