@@ -138,46 +138,47 @@ def main():
     parameter_study(params_dict_5g_heating_cooling_xiyuan_study, dir_sciebo)
 
 
-def convert_dhw_load_to_storage_load(dhw_demand, dhw_demand_Unit='Wh', s_step=3600, plot_demand=True):
+def convert_dhw_load_to_storage_load(dhw_demand, s_step=600, plot_demand=True):
     """
     Converts the input DHW-Profile without a DHW-Storage to a DHW-Profile with a DHW-Storage.
     The output profile looks as if the HP would not supply the DHW-load directly but would rather re-heat
     the DHW-Storage, which has dropped below a certain dT Threshold.
-    :return:
+    The advantage is, that no storage model has to be part of a dynamic simulation,
+    although the heatpump still acts as if a storage is supplied. Based on DIN EN 12831-3.
+
+    :param dhw_demand:      List, stores the DHW-demand profile in [W] per Timestep
+    :param s_step:          Seconds within a timestep. Usual Values are 3600 (1h timesteps) or 600 (10min timesteps)
+    :param plot_demand:     Plot the "Summenliniendiagram" as described in DIN DIN EN 12831-3
+    :return: storage_load:  DHW-profile that re-heats a storage.
     """
 
-    # ---- convert the DHW demand from the input Unit to Joule -----
-    if dhw_demand_Unit == 'Wh':
-        conversion_factor = 3600    # Wh to J
-    elif dhw_demand_Unit == 'J':
-        conversion_factor = 1
-    else:
-        raise Exception("Unknown DHW Time Series Unit. Please add a conversion factor for your Unit or change it")
-    dhw_demand = [dem_step * conversion_factor for dem_step in dhw_demand]
+    # convert the DHW demand from Watt to Joule by multiplying by the timestep width
+    dhw_demand = [dem_step * s_step for dem_step in dhw_demand]
 
     # --------- Storage Data ---------------
     # Todo: get parameters from DIN
-    V_stor = 1000   # Storage Volume in Liters
+    # Todo: think about how Parameters should be for Schichtspeicher
+    V_stor = 400   # Storage Volume in Liters
     rho = 1         # Liters to Kilograms
     m_w = V_stor * rho  # Mass Water in Storage
     c_p = 4180  # Heat Capacity Water in [J/kgK]
-    dT = 50
+    dT = 55     # dT of Storage, e.f 10°C to 65°C -> 55K
     Q_full = m_w * c_p * dT
 
-    dT_threshhold = 5   # max Temp Drop [K] in Storage
+    dT_threshhold = 10   # max Temp Drop [K] in Storage before Re-heating starts
     dQ_threshhold = m_w * c_p * dT_threshhold
     Qcon_flow_max = 5000   # Heat flow rate in [W] of the HP in Storage-Heating Mode
 
-    t_dQ = dQ_threshhold/Qcon_flow_max  # time needed to increase storage Temp by
-    t_dQ_h = t_dQ/s_step  # convert from seconds to hours
+    t_dQ = dQ_threshhold/Qcon_flow_max  # time needed to increase storage Temp by dT_threshhold in seconds [s]
+    t_dQ_steps = t_dQ/s_step  # convert from seconds to timestep width
 
-    timesteps = round(t_dQ_h-0.5)  # -> round 5K-time to lower integer value
+    timesteps = round(t_dQ_steps-0.5)  # -> round number of timesteps to lower integer value
 
-    Q_dh_timesteps = dQ_threshhold * (timesteps/t_dQ_h)     # energy added to Storage in the rounded 5K-time
+    Q_dh_timesteps = dQ_threshhold * (timesteps/t_dQ_steps)     # energy added to Storage in t_dQ_steps
     Q_dh_timesteps2 = Qcon_flow_max * timesteps * s_step      # just another way to compute it
     Q_dh_timestep = Qcon_flow_max * s_step    # energy added in 1 timestep
 
-    # ---------- write new time series --------
+    # ---------- write storage load time series --------
     dQ_track = 0    # tracks the cumulative dhw demand until the Temp falls more than 5K.
     storage_load = []   # new time series
     above_dT_threshhold = True
@@ -218,7 +219,8 @@ def convert_dhw_load_to_storage_load(dhw_demand, dhw_demand_Unit='Wh', s_step=36
     # Count number of clusters of non-zero values ("peaks") -> reduces the amount of HP mode switches!
     dhw_peaks = int(np.diff(np.concatenate([[0], dhw_demand, [0]]) == 0).sum() / 2)
     stor_peaks = int(np.diff(np.concatenate([[0], storage_load, [0]]) == 0).sum() / 2)
-    print("The Storage reduced the number of DHW heating periods from {} to {}".format(dhw_peaks, stor_peaks))
+    print("The Storage reduced the number of DHW heating periods from {} to {}, which is equal to "
+          "{:.2f} and {:.2f} per day, respectively.".format(dhw_peaks, stor_peaks, dhw_peaks/365, stor_peaks/365))
 
     # Summenlinien
     dhw_demand_sumline = []
@@ -251,7 +253,7 @@ def convert_dhw_load_to_storage_load(dhw_demand, dhw_demand_Unit='Wh', s_step=36
         plt.show()
 
     # Input Unit of DHW demand should be equal to Output Unit of DHW demand
-    storage_load = [stor_step/conversion_factor for stor_step in storage_load]
+    storage_load = [stor_step/s_step for stor_step in storage_load]
 
     return storage_load
 
@@ -371,7 +373,7 @@ def import_ground_temp_table(dir_sciebo, plot_series=False):
     return ground_temps_lst
 
 
-def import_from_dhwcalc(dir_sciebo, s_step=3600, delta_t_dhw=35, plot_demand=False):
+def import_from_dhwcalc(dir_sciebo, s_step=600, delta_t_dhw=35, plot_demand=False):
     """
     DHWcalc yields Volume Flow TimeSeries (in Liters per hour).
     To get Energyflows, we have to multiply by rho, cp and dt. -> Q = Vdot * rho * cp * dt
@@ -407,10 +409,21 @@ def import_from_dhwcalc(dir_sciebo, s_step=3600, delta_t_dhw=35, plot_demand=Fal
     return dhw_demand   # in W
 
 
-def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interval=3600, plot_demand=False):
-    # files from EON.EBC DemGen. 8760 time steps in [W]
-    # Calculate your own demands at http://demgen.testinstanz.os-cloud.eonerc.rwth-aachen.de/
+def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interval=600, plot_demand=False):
+    """
+    files from EON.EBC DemGen. 8760 time steps in [W]
+    Calculate your own demands at http://demgen.testinstanz.os-cloud.eonerc.rwth-aachen.de/
+    Values for DemGen can be found in "SIA2024 - Raumnutzungsdaten Energie Gebaeudetechnik - 2015 - Page 33"
 
+    :param dir_sciebo:      String: sciebo folder
+    :param house_type:      String: Definitions of SIA2024. Standard = Standardwert, Old = Bestand, New = Zielwert
+    :param output_interval: int:    Output intervall. Only gets upscaled, as all  DemGen profiles are hourly profiles.
+    :param plot_demand:     Bool:   decide to plot the demand profiles
+    :return heat_demand:    List:   heating demand time series
+            cold_demand:    List:   cooling demand time series
+    """
+
+    # Todo: API for DemGen would be very nice
     if house_type == 'Standard':
         heat_profile_file = '/demand_profiles/DemGen/Heat_demand_Berlin_200qm_SingleFamilyHouse_SIA_standard_Values.txt'
         cold_profile_file = '/demand_profiles/DemGen/Cool_demand_Berlin_200qm_SingleFamilyHouse_SIA_standard_Values.txt'
