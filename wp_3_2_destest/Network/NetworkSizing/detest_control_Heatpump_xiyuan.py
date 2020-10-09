@@ -6,8 +6,11 @@ from shapely.geometry import Point
 import pandas as pd
 import os
 
-from uesmodels.uesmodel import UESModel
-import uesmodels as um
+# from uesmodels.uesmodel import UESModel
+# import uesmodels as um
+
+from uesgraphs.systemmodels import systemmodelheating as sysmh
+from uesgraphs.systemmodels import utilities as sysmod_utils
 
 
 def main():
@@ -23,9 +26,8 @@ def main():
         'https://raw.githubusercontent.com/ibpsa/project1/WP3/'
         'wp_3_2_destest/Network/NetworkSizing/Node%20data.csv', sep=',')
 
-    pipe_data = pd.read_csv(
-        'https://raw.githubusercontent.com/ibpsa/project1/WP3/'
-        'wp_3_2_destest/Network/NetworkSizing/Pipe%20data.csv', sep=',')
+    pipe_data = pd.read_csv('Pipe_data.csv', sep=',')
+    # node_data = pd.read_csv('Node data.csv', sep=',')
 
     node_data = node_data.set_index('Node')
 
@@ -103,10 +105,12 @@ def main():
         scaling_factor_diameter=100
     )
 
-    # write demand data to graph
+    # write demand data to graph, positive is heating, negative is cooling
 
-    demand_data = pd.read_excel('demand_data.xlsx',sheet_name='Tabelle4',sep =',')
-    DHW_data = pd.read_excel('demand_data.xlsx',sheet_name='Tabelle3',sep =',')
+    dem_path = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH" \
+               "/Data/demand_profiles/demand_data_MA_Xiyuan.xlsx"
+    demand_data = pd.read_excel(dem_path, sheet_name='Tabelle4', sep =',')
+    DHW_data = pd.read_excel(dem_path, sheet_name='Tabelle3', sep =',')
 
     # x = range(0, 31536000, 900)
     # index_to_drop = []
@@ -151,10 +155,10 @@ def main():
             OCT = [273.15+10]*4464
             NOV = [273.15+10]*4320
             DEC = [273.15+10]*4465
-            simple_district.nodes[bldg]['T_supply'] = JAN+FEB+MAR+APR+MAY+JUN+JUL+AUG+SEP+OCT+NOV+DEC
+            simple_district.nodes[bldg]['TIn'] = JAN+FEB+MAR+APR+MAY+JUN+JUL+AUG+SEP+OCT+NOV+DEC
             
             
-            simple_district.nodes[bldg]['p_supply'] = [5e5]
+            simple_district.nodes[bldg]['dpIn'] = [5e5]
 
     # write general simulation data to graph
     # values needs to be revised for common excersise
@@ -192,21 +196,23 @@ def main():
         simple_district.edges[edge[0], edge[1]]['roughness'] = 2.5e-5   # Ref
 
     # special m_flow estimation
-    simple_district = um.utilities.estimate_m_flow_nominal_tablebased(
-        simple_district,
-        network_type='heating')
+    # simple_district = um.utilities.estimate_m_flow_nominal_tablebased(
+    #     simple_district,
+    #     network_type='heating')
 
     # peak power m_flow estimation
-    simple_district = um.utilities.estimate_m_flow_nominal(
-        simple_district,
-        dT_design=20,
-        network_type='heating')
+    # simple_district = um.utilities.estimate_m_flow_nominal(
+    #     simple_district,
+    #     dT_design=20,
+    #     network_type='heating')
+    sysmod_utils.estimate_m_flow_nominal(graph=simple_district, dT_design=20,
+                                         network_type='heating', input_heat_str='input_heat')
 
     dir_model = os.path.join(os.path.dirname(__file__), 'model')
     if not os.path.exists(dir_model):
         os.mkdir(dir_model)
 
-    new_model = UESModel(network_type=simple_district.graph['network_type'])
+    new_model = sysmh.SystemModelHeating(network_type=simple_district.graph["network_type"])
     new_model.stop_time = end_time
     new_model.timestep = time_step
     new_model.tolerance = 1e-5
@@ -230,10 +236,10 @@ def main():
     )
 
     package = 'AixLib.Fluid.DistrictHeatingCooling.'
-    model_supply_ideal = package + 'Supplies.ClosedLoop.IdealSourcewithT_supply'
+    model_supply_ideal = package + 'Supplies.ClosedLoop.IdealPlantPump'    # Supplies.ClosedLoop.IdealSourcewithT_supply
 #    model_supply_power = package + 'Supplies.OpenLoop.SourcePowerDoubleMvar'
     model_demand = package +\
-        'Demands.ClosedLoop.PumpControlledwithHP'
+        'Demands.ClosedLoop.PumpControlledwithHP_V4'
     model_pipe = 'AixLib.Fluid.FixedResistances.PlugFlowPipe'
 
     new_model.add_return_network = True

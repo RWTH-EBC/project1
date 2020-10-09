@@ -327,12 +327,14 @@ def import_demands_from_github(compute_cold=False, plot_demand=False):
         cold_demand = cold_demand_df["SimpleDistrict_1"].values  # mane numpy nd array
         cold_demand = [round(x, 1) for x in cold_demand]  # this demand is rounded to 1 digit for better readability
 
-        yearly_cold_demand = sum(cold_demand) / 1000  # in kWh
-        print("Yearly cold energy demand from IBPSA is {:.2f} kWh".format(yearly_cold_demand))
+        yearly_cold_demand = sum(cold_demand) * 600 / (1000 * 3600)  # in kWh
+        average_cold_flow = (sum(cold_demand) / len(cold_demand)) / 1000
+        print("Yearly heat energy demand from IBPSA is {:.2f} kWh,"
+              "with an average of {:.2f} kW".format(yearly_cold_demand, average_cold_flow))
 
         if plot_demand:
             plt.plot(cold_demand)
-            plt.ylabel('heat demand, sum={:.2f}'.format(yearly_cold_demand))
+            plt.ylabel('cold demand in kW, sum={:.2f} kWh, av={:.2f} kW'.format(yearly_cold_demand, average_cold_flow))
             plt.show()
 
         return_series = heat_demand, cold_demand
@@ -369,34 +371,40 @@ def import_ground_temp_table(dir_sciebo, plot_series=False):
     return ground_temps_lst
 
 
-def import_from_dhwcalc(dir_sciebo, delta_t_dhw=35, plot_demand=False):
+def import_from_dhwcalc(dir_sciebo, s_step=3600, delta_t_dhw=35, plot_demand=False):
     """
-    DHWcalc yields Volume Flow TimeSeries (in Liters per hour) for 8760 hourly steps.
+    DHWcalc yields Volume Flow TimeSeries (in Liters per hour).
     To get Energyflows, we have to multiply by rho, cp and dt. -> Q = Vdot * rho * cp * dt
-    :return: dhw_demand:    time series. each hourly timestep contains the Energydemand in Watthours -> Wh/1h
-    """
 
-    dhw_file_in_sciebo = "/demand_profiles/DHWcalc/DHW_default_8760_200l_stepFunctionforMonths/DHW0001_DHW.txt"
+    :return: dhw_demand:    time series. each timestep contains the Energyflow in Watt -> W
+    """
+    if s_step == 3600:
+        dhw_file_in_sciebo = "/demand_profiles/DHWcalc/DHW_default_8760_200l_stepFunctionforMonths/DHW0001_DHW.txt"
+    elif s_step == 600:
+        dhw_file_in_sciebo = "/demand_profiles/DHWcalc/DHW_10min_200l_stepFunctionforMonths/DHW10mins_DHW.txt"
+    else:
+        raise Exception("Unkown Time Step for DHWcalc")
     dhw_profile = dir_sciebo + dhw_file_in_sciebo
 
-    dhw_demand_LperH = [int(word.strip('\n')) for word in open(dhw_profile).readlines()]
-    dhw_demand_LperH = [round(x, 1) for x in dhw_demand_LperH]
+    dhw_demand_LperH_perStep = [int(word.strip('\n')) for word in open(dhw_profile).readlines()]     # L/h each step
+    dhw_demand_LperSec_perStep = [x/3600 for x in dhw_demand_LperH_perStep]
 
-    joule_in_Wh = 1/3600   # 1J = 1Ws = 1Wh/3600
-    rho = 1  # 1L =0.001m^3 = 1kg for Water
+    rho = 1  # 1L = 1kg for Water
     cp = 4180  # J/kgK
     dt = delta_t_dhw  # K
+    dhw_demand = [LperSec_per_step * rho * cp * dt for LperSec_per_step in dhw_demand_LperSec_perStep]  # in W
 
-    dhw_demand = [x * rho * cp * dt * joule_in_Wh for x in dhw_demand_LperH]    # in Wh
-    yearly_dhw_energy_demand = sum(dhw_demand)/1000     # in kWh
-    print("Yearly DHW energy demand from DHWcalc is {:.2f} kWh".format(yearly_dhw_energy_demand))
+    yearly_dhw_energy_demand = sum(dhw_demand) * s_step / (3600 * 1000)     # in kWh
+    average_dhw_heat_flow = (sum(dhw_demand) / len(dhw_demand)) / 1000          # in kW
+    print("Yearly DHW energy demand from DHWcalc is {:.2f} kWh"
+          " with an average of {:.2f} kW".format(yearly_dhw_energy_demand, average_dhw_heat_flow))
 
     if plot_demand:
         plt.plot(dhw_demand)
         plt.ylabel('dhw DHWcalc kWh, sum={:.2f}'.format(yearly_dhw_energy_demand))
         plt.show()
 
-    return dhw_demand   # in Wh
+    return dhw_demand   # in W
 
 
 def import_demands_from_demgen(dir_sciebo, plot_demand=False):
