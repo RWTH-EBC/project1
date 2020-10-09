@@ -40,9 +40,9 @@ def main():
     ground_temps = import_ground_temp_table(dir_sciebo, plot_series=False)
 
     # dhw_demand_pycity = generate_dhw_profile_pycity()
-    dhw_demand_dhwcalc = import_from_dhwcalc(dir_sciebo, plot_demand=False)
-    # heat_demand_ibpsa = import_demands_from_github()
-    heat_demand_demgen, cold_demand_demgen = import_demands_from_demgen(dir_sciebo, plot_demand=False)
+    # dhw_demand_dhwcalc = import_from_dhwcalc(dir_sciebo, plot_demand=False)
+    heat_demand_ibpsa = import_demands_from_github()
+    heat_demand_demgen, cold_demand_demgen = import_demands_from_demgen(dir_sciebo, house_type='Old', plot_demand=False)
 
     heat_demand = heat_demand_demgen
     cold_demand = cold_demand_demgen
@@ -309,7 +309,7 @@ def import_demands_from_github(compute_cold=False, plot_demand=False):
 
     yearly_heat_demand = sum(heat_demand)*600/(1000*3600)  # in kWh
     average_heat_flow = (sum(heat_demand)/len(heat_demand))/1000
-    print("Yearly heat energy demand from IBPSA is {:.2f} kWh,"
+    print("Yearly heating demand from IBPSA is {:.2f} kWh,"
           "with an average of {:.2f} kW".format(yearly_heat_demand, average_heat_flow))
 
     if plot_demand:
@@ -329,7 +329,7 @@ def import_demands_from_github(compute_cold=False, plot_demand=False):
 
         yearly_cold_demand = sum(cold_demand) * 600 / (1000 * 3600)  # in kWh
         average_cold_flow = (sum(cold_demand) / len(cold_demand)) / 1000
-        print("Yearly heat energy demand from IBPSA is {:.2f} kWh,"
+        print("Yearly cooling demand from IBPSA is {:.2f} kWh,"
               "with an average of {:.2f} kW".format(yearly_cold_demand, average_cold_flow))
 
         if plot_demand:
@@ -407,12 +407,22 @@ def import_from_dhwcalc(dir_sciebo, s_step=3600, delta_t_dhw=35, plot_demand=Fal
     return dhw_demand   # in W
 
 
-def import_demands_from_demgen(dir_sciebo, plot_demand=False):
-    # files from EON.EBC DemGen. 8760 time steps in [Wh]
+def import_demands_from_demgen(dir_sciebo, house_type='Standard', plot_demand=False):
+    # files from EON.EBC DemGen. 8760 time steps in [W]
     # Calculate your own demands at http://demgen.testinstanz.os-cloud.eonerc.rwth-aachen.de/
 
-    heat_profile_file = '/demand_profiles/DemGen/Heat_demand_Berlin_200qm_SingleFamilyHouse_SIA_standard_Values.txt'
-    cold_profile_file = '/demand_profiles/DemGen/Cool_demand_Berlin_200qm_SingleFamilyHouse_SIA_standard_Values.txt'
+    if house_type == 'Standard':
+        heat_profile_file = '/demand_profiles/DemGen/Heat_demand_Berlin_200qm_SingleFamilyHouse_SIA_standard_Values.txt'
+        cold_profile_file = '/demand_profiles/DemGen/Cool_demand_Berlin_200qm_SingleFamilyHouse_SIA_standard_Values.txt'
+    elif house_type == 'Old':
+        heat_profile_file = '/demand_profiles/DemGen/Heat_demand_Berlin_200qm_SingleFamilyHouse_SIA_Bestand_Values.txt'
+        cold_profile_file = '/demand_profiles/DemGen/Cool_demand_Berlin_200qm_SingleFamilyHouse_SIA_Bestand_Values.txt'
+    elif house_type == 'New':
+        raise Exception("Not Implemented yet")
+    else:
+        raise Exception("Unknown House Type for DemGen")
+
+    # Absolute Path
     heat_demand_file = dir_sciebo + heat_profile_file
     cold_demand_file = dir_sciebo + cold_profile_file
 
@@ -421,23 +431,28 @@ def import_demands_from_demgen(dir_sciebo, plot_demand=False):
     cold_demand_np = np.loadtxt(cold_demand_file)
 
     # demand is rounded to 1 digit for better readability and converted to a list object
-    heat_demand = [round(x, 1) for x in heat_demand_np]     # in Wh
-    cold_demand = [round(x, 1) for x in cold_demand_np]     # in Wh
+    heat_demand = [round(x, 1) for x in heat_demand_np]     # in W
+    cold_demand = [round(x, 1) for x in cold_demand_np]     # in W
 
+    # print total energy and average energy flow
     yearly_heat_demand = sum(heat_demand) / 1000    # in kWh
-    print("Yearly heat energy demand from DemGen is {:.2f} kWh".format(yearly_heat_demand))
+    average_heat_demand = (sum(heat_demand) / len(heat_demand)) / 1000  # in kW
+    print("Yearly heating demand for a {} house from DemGen is {:.2f} kWh "
+          "with an average of {:.2f} kW".format(house_type, yearly_heat_demand, average_heat_demand))
     yearly_cold_demand = sum(cold_demand) / 1000    # in kWh
-    print("Yearly cold energy demand from DemGen is {:.2f} kWh".format(yearly_cold_demand))
+    average_cold_demand = (sum(cold_demand) / len(cold_demand)) / 1000  # in kW
+    print("Yearly cooling demand for a {} house from DemGen is {:.2f} kWh "
+          "with an average of {:.2f} kW".format(house_type, yearly_cold_demand, average_cold_demand))
 
     if plot_demand:
         plt.plot(heat_demand)
-        plt.ylabel('heat demand, sum={:.2f}'.format(yearly_cold_demand))
+        plt.ylabel('heat demand, sum={:.2f} kWh'.format(yearly_cold_demand))
         plt.show()
         plt.plot(cold_demand)
-        plt.ylabel('heat demand, sum={:.2f}'.format(yearly_cold_demand))
+        plt.ylabel('heat demand, sum={:.2f} kWh'.format(yearly_cold_demand))
         plt.show()
 
-    return heat_demand, cold_demand
+    return heat_demand, cold_demand     # in W
 
 
 def create_study_pre_csv(dir_sciebo):
