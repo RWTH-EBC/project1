@@ -40,22 +40,22 @@ def main():
     ground_temps = import_ground_temp_table(dir_sciebo, plot_series=False)
 
     # dhw_demand_pycity = generate_dhw_profile_pycity()
-    # dhw_demand_dhwcalc = import_from_dhwcalc(dir_sciebo, plot_demand=False)
-    heat_demand_ibpsa = import_demands_from_github()
+    dhw_demand_dhwcalc = import_from_dhwcalc(dir_sciebo, plot_demand=False)
+    # heat_demand_ibpsa = import_demands_from_github()
     heat_demand_demgen, cold_demand_demgen = import_demands_from_demgen(dir_sciebo, house_type='Old', plot_demand=False)
 
     heat_demand = heat_demand_demgen
     cold_demand = cold_demand_demgen
     dhw_demand = dhw_demand_dhwcalc
 
-    convert_dhw_load_to_storage_load(dhw_demand)
+    storage_load = convert_dhw_load_to_storage_load(dhw_demand)
 
     max_heat_demand = max(heat_demand)
     max_cold_demand = max(cold_demand)
 
     # ------------------------ Parameter Dictionaries to pass into parameter study function -------------------------
     aixlib_dhc = "AixLib.Fluid.DistrictHeatingCooling."
-    params_dict_5g_heating_cooling_xiyuan_single = {
+    params_dict_5g = {
         # ----------------------------------------- General/Graph Data -------------------------------------------------
         'graph__network_type': 'heating',
         'graph__t_nominal': [273.15 + 11.14],  # Start value for every pipe? Water Properties?
@@ -64,15 +64,20 @@ def main():
         'graph__t_ground': ground_temps,
         'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
         # ----------------- Pipe/Edge Data ----------------
-        'model_pipe': aixlib_dhc + 'Pipes.PlugFlowPipeEmbedded',
+        'model_pipe': 'AixLib.Fluid.FixedResistances.PlugFlowPipe',
         'edge__fac': 1.0,
         'edge__roughness': 2.5e-5,
+        # 'edge__kIns': [0.035],
+        # 'edge__kIns': [0.002, 0.035],
+        # 'edge__dIns': [0.045],
+        # 'edge__dIns': [0.0025, 0.045],
+        'pipe_scaling_factor': [1],
         # ------------------------------------ Demand/House Node Data ---------------------------------
-        'model_demand': aixlib_dhc + "Demands.ClosedLoop.PumpControlledwithHP_v4_ze_jonas_new_cooling_control",  # 5GDHC
+        'model_demand': aixlib_dhc + "Demands.ClosedLoop.ValveControlledHeatPumpDirectCoolingDHWnoStorage",  # 5GDHC
         'demand__heat_input': heat_demand,
         'input_heat_str': 'heat_input',
         'demand__cold_input': cold_demand,
-        'demand__dhw_input': dhw_demand,
+        'demand__dhw_input': storage_load,
         'demand__T_dhw_supply': [273.15 + 65],  # T_VL DHW
         'demand__dT_Network': [10],
         'demand__heatDemand_max': max_heat_demand,
@@ -81,13 +86,10 @@ def main():
         # ------------------------------ Supply Node Data --------------------------
         'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPump',
         'supply__TIn': [273.15 + 20],  # -> t_supply
-        # 'supply__t_return': 273.15 + 10,    # should be equal to demand__t_return!
         'supply__dpIn': [5e5],  # p_supply
-        # 'supply__p_return': 2e5,
-        # 'supply__m_flow_nominal': [1, 2],
         # ------------------------------------ Pressure Control ------------------------------------------
         "pressure_control_supply": "Destest_Supply",  # Name of the supply that controls the pressure
-        "pressure_control_dp": 0.5e5,  # Pressure difference to be held at reference building
+        "pressure_control_dp": [0.5e5],  # Pressure difference to be held at reference building
         "pressure_control_building": "max_distance",  # reference building for the network
         "pressure_control_p_max": [4e5],  # Maximum pressure allowed for the pressure controller
         "pressure_control_k": 12,  # gain of controller
@@ -135,7 +137,7 @@ def main():
     }
 
     # ---------------------------------------- create Simulations ----------------------------------------------
-    parameter_study(params_dict_5g_heating_cooling_xiyuan_study, dir_sciebo)
+    parameter_study(params_dict_5g, dir_sciebo)
 
 
 def convert_dhw_load_to_storage_load(dhw_demand, s_step=600, plot_demand=True):
@@ -344,11 +346,13 @@ def import_demands_from_github(compute_cold=False, plot_demand=False):
     return return_series
 
 
-def import_ground_temp_table(dir_sciebo, plot_series=False):
+def import_ground_temp_table(dir_sciebo, output_interval=600, plot_series=False):
     """
     Imports the ground Temperature file from the DWD. Data can be found at
     https://cdc.dwd.de/rest/metadata/station/html/812300083047
+    hourly timesteps
     :param dir_sciebo: sciebo folder where the data is stored
+    :param output_interval: Only gets upscaled, as all DWD profiles are hourly profiles(?)
     :param plot_series: decide if you want to plot the temperature series
     :return: return the series as a list object
     """
@@ -360,7 +364,7 @@ def import_ground_temp_table(dir_sciebo, plot_series=False):
 
     ground_temps_df = ground_temps_csv_df[["Wert"]]
     ground_temps_np = ground_temps_df["Wert"].values  # mane numpy nd array
-    ground_temps_lst = [round(x, 1) for x in ground_temps_np]  # this demand is rounded to 1 digit for better readability
+    ground_temps_lst = [round(x, 2) for x in ground_temps_np]  # rounded to 2 digits for better readability
     mean_temp = sum(ground_temps_lst) / len(ground_temps_lst)
 
     if plot_series:
@@ -369,6 +373,11 @@ def import_ground_temp_table(dir_sciebo, plot_series=False):
         plt.show()
 
     ground_temps_lst = [273.15 + temp for temp in ground_temps_np]  # convert to Kelvin
+
+    # upscale series to a certain length
+    steps = 3600 / output_interval
+    ground_temps_lst = [[temp] * int(steps) for temp in ground_temps_lst]  # list of lists
+    ground_temps_lst = [temp for temp_step in ground_temps_lst for temp in temp_step]   # flatten list
 
     return ground_temps_lst
 
@@ -417,7 +426,7 @@ def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interva
 
     :param dir_sciebo:      String: sciebo folder
     :param house_type:      String: Definitions of SIA2024. Standard = Standardwert, Old = Bestand, New = Zielwert
-    :param output_interval: int:    Output intervall. Only gets upscaled, as all  DemGen profiles are hourly profiles.
+    :param output_interval: int:    Output interval. Only gets upscaled, as all  DemGen profiles are hourly profiles.
     :param plot_demand:     Bool:   decide to plot the demand profiles
     :return heat_demand:    List:   heating demand time series
             cold_demand:    List:   cooling demand time series
@@ -468,7 +477,9 @@ def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interva
     # stretch out the list to match a given output interval. F.e: [2,4] -> steps = 3 ->[2,2,2,4,4,4]
     steps = 3600/output_interval
     heat_demand = [[dem] * int(steps) for dem in heat_demand]   # list of lists
-    heat_demand = [dem for dem_step in heat_demand for dem in dem_step]
+    heat_demand = [dem for dem_step in heat_demand for dem in dem_step]  # flatten list
+    cold_demand = [[dem] * int(steps) for dem in cold_demand]  # list of lists
+    cold_demand = [dem for dem_step in cold_demand for dem in dem_step]  # flatten lsit
 
     return heat_demand, cold_demand     # in W
 
@@ -524,8 +535,8 @@ def find(pattern, path):
                 results.append(os.path.join(root, name))
 
     if not results:
-        print("No File found that contains '{pattern}' in result directory {path}" \
-              .format(pattern=pattern, path=path))
+        print("No File found that contains '{pattern}' "
+              "in result directory {path}".format(pattern=pattern, path=path))
 
     return results
 
@@ -587,12 +598,13 @@ def parameter_study(params_dict, dir_sciebo):
     return len(param_grid)
 
 
-def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
+def generate_model(params_dict, dir_sciebo, s_step=600, save_params_to_csv=True):
     """
     Defines a building node dictionary and adds it to the graph. Adds network nodes to the graph and creates
     a district heating network graph. Creates a Modelica Model of the Graph and saves it to dir_sciebo.
     :param params_dict: dictionary:         simulation parameters and their initial values
     :param dir_sciebo:  string:             path of the sciebo folder
+    :param s_step:      Integer:            Timestep Length in Seconds
     :param save_params_to_csv: boolean:    defines if parameter dict is saved to csv for later analysis
     :return:
     """
@@ -675,12 +687,12 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
         simple_district.edges[
             simple_district.nodes_by_name[row['Beginning Node']],
             simple_district.nodes_by_name[row['Ending Node']]]['length'] = row['Length [m]']
-        # simple_district.edges[
-        #     simple_district.nodes_by_name[row['Beginning Node']],
-        #     simple_district.nodes_by_name[row['Ending Node']]]['dIns'] = row['Insulation Thickness [m]']
-        # simple_district.edges[
-        #     simple_district.nodes_by_name[row['Beginning Node']],
-        #     simple_district.nodes_by_name[row['Ending Node']]]['kIns'] = row['U-value [W/mK]']
+        simple_district.edges[
+            simple_district.nodes_by_name[row['Beginning Node']],
+            simple_district.nodes_by_name[row['Ending Node']]]['dIns'] = row['Insulation Thickness [m]']
+        simple_district.edges[
+            simple_district.nodes_by_name[row['Beginning Node']],
+            simple_district.nodes_by_name[row['Ending Node']]]['kIns'] = row['U-value [W/mK]']
 
     for edge in simple_district.edges():
         simple_district.edges[edge[0], edge[1]]['name'] = str(edge[0]) + 'to' + str(edge[1])
@@ -706,7 +718,7 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
     # write m_flow_nominal to the supply
     # Todo: no support for multiple supplies yet
     pipes_from_supply = 2
-    safety_factor = 1.5
+    safety_factor = 1
     m_flow_nominal_supply = m_flow_nominal_max * pipes_from_supply * safety_factor
     for bldg in simple_district.nodelist_building:
         if simple_district.nodes[bldg]['is_supply_heating']:
@@ -733,8 +745,8 @@ def generate_model(params_dict, dir_sciebo, save_params_to_csv=True):
     assert not save_name[0].isdigit(), "Model name cannot start with a digit"
 
     new_model = sysmh.SystemModelHeating(network_type=simple_district.graph["network_type"])
-    new_model.stop_time = 365 * 24 * 1
-    new_model.timestep = 1
+    new_model.stop_time = 365 * 24 * 3600
+    new_model.timestep = s_step
     new_model.import_from_uesgraph(simple_district)
     new_model.set_connection(remove_network_nodes=True)
 
