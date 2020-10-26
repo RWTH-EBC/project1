@@ -13,6 +13,7 @@ import itertools
 from sklearn.model_selection import ParameterGrid
 import sys
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 from pathlib import Path
 import fnmatch
 import shutil
@@ -154,17 +155,23 @@ def main():
     parameter_study(params_dict_case1b, dir_sciebo)
 
 
-def convert_dhw_load_to_storage_load(dhw_demand, s_step=600, plot_demand=False):
+def convert_dhw_load_to_storage_load(dhw_demand, s_step=600, V_stor=200, dT_stor=30, dT_threshhold=10,
+                                     Qcon_flow_max=5000, plot_cum_demand=True, plot_demand=True):
     """
     Converts the input DHW-Profile without a DHW-Storage to a DHW-Profile with a DHW-Storage.
     The output profile looks as if the HP would not supply the DHW-load directly but would rather re-heat
     the DHW-Storage, which has dropped below a certain dT Threshold.
-    The advantage is, that no storage model has to be part of a dynamic simulation,
+    The advantage is, that no storage model has to be part of a d ynamic simulation,
     although the heatpump still acts as if a storage is supplied. Based on DIN EN 12831-3.
 
     :param dhw_demand:      List, stores the DHW-demand profile in [W] per Timestep
     :param s_step:          Seconds within a timestep. Usual Values are 3600 (1h timesteps) or 600 (10min timesteps)
-    :param plot_demand:     Plot the "Summenliniendiagram" as described in DIN DIN EN 12831-3
+    :param V_stor:          Storage Volume in Liters
+    :param dT_stor:         max dT in Storage
+    :param dT_threshhold:   max dT Drop before Storage needs to be re-heated
+    :param Qcon_flow_max:   max Heat Flow Rate at the Heatpump when refilling the Storage in [W]
+    :param plot_cum_demand: Plot the cumulative "Summenliniendiagram" as described in DIN DIN EN 12831-3
+    :param plot_demand:     Plot the dhw demand before and after the storage load conversion.
     :return: storage_load:  DHW-profile that re-heats a storage.
     """
 
@@ -174,16 +181,17 @@ def convert_dhw_load_to_storage_load(dhw_demand, s_step=600, plot_demand=False):
     # --------- Storage Data ---------------
     # Todo: get parameters from DIN
     # Todo: think about how Parameters should be for Schichtspeicher
-    V_stor = 200   # Storage Volume in Liters
+    # Todo: Implement Heat Losses
+    V_stor = V_stor   # Storage Volume in Liters
     rho = 1         # Liters to Kilograms
     m_w = V_stor * rho  # Mass Water in Storage
     c_p = 4180  # Heat Capacity Water in [J/kgK]
-    dT = 55     # dT of Storage, e.f 10°C to 65°C -> 55K
+    dT = dT_stor     # dT of Storage, e.f 10°C to 65°C -> 55K
     Q_full = m_w * c_p * dT
 
-    dT_threshhold = 10   # max Temp Drop [K] in Storage before Re-heating starts
+    dT_threshhold = dT_threshhold   # max Temp Drop [K] in Storage before Re-heating starts
     dQ_threshhold = m_w * c_p * dT_threshhold
-    Qcon_flow_max = 5000   # Heat flow rate in [W] of the HP in Storage-Heating Mode
+    Qcon_flow_max = Qcon_flow_max   # Heat flow rate in [W] of the HP in Storage-Heating Mode
 
     t_dQ = dQ_threshhold/Qcon_flow_max  # time needed to increase storage Temp by dT_threshhold in seconds [s]
     t_dQ_steps = t_dQ/s_step  # convert from seconds to timestep width
@@ -260,16 +268,24 @@ def convert_dhw_load_to_storage_load(dhw_demand, s_step=600, plot_demand=False):
                 last_zero_index = idx
         storage_load[last_zero_index] += diff
 
-    # plot Summenlinien
-    if plot_demand:
+    # Plots
+    if plot_cum_demand:
         plt.plot([dem_step/(3600*1000) for dem_step in dhw_demand_sumline])
         plt.plot([stor_step/(3600*1000) for stor_step in storage_load_sumline])
-        plt.ylabel('storage load and dhw demand in kWh')
+        plt.ylabel('cumulative storage load and dhw demand in kWh')
         plt.title('Bedarfs ({} Peaks) und Versorgungskennliene ({} Peaks)'.format(dhw_peaks, stor_peaks))
         plt.show()
 
     # Input Unit of DHW demand should be equal to Output Unit of DHW demand
-    storage_load = [stor_step/s_step for stor_step in storage_load]
+    storage_load = [stor_step / s_step for stor_step in storage_load]
+    dhw_demand = [dem_step / s_step for dem_step in dhw_demand]
+
+    if plot_demand:
+        plt.plot([stor_step for stor_step in dhw_demand])
+        plt.plot([dem_step for dem_step in storage_load])
+        plt.ylabel('storage load and dhw demand in Watt')
+        plt.title('DHW ({} Peaks) und Storage ({} Peaks)'.format(dhw_peaks, stor_peaks))
+        plt.show()
 
     return storage_load
 
@@ -430,7 +446,8 @@ def import_from_dhwcalc(dir_sciebo, s_step=600, delta_t_dhw=35, plot_demand=Fals
 
     if plot_demand:
         plt.plot(dhw_demand)
-        plt.ylabel('dhw DHWcalc kWh, sum={:.2f}'.format(yearly_dhw_energy_demand))
+        plt.ylabel('DHW demand in Watt')
+        plt.title('DHW Profile, sum={:.2f} kWh. av {:.2f} kW'.format(yearly_dhw_energy_demand, average_dhw_heat_flow))
         plt.show()
 
     if start_in_summer:
@@ -481,20 +498,26 @@ def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interva
 
     # print total energy and average energy flow
     yearly_heat_demand = sum(heat_demand) / 1000    # in kWh
-    average_heat_demand = (sum(heat_demand) / len(heat_demand)) / 1000  # in kW
+    average_heat_demand = (sum(heat_demand) / len(heat_demand)) / 1000  # in kW per step
+    max_heat_demand = max(heat_demand) / 1000   # in kW per step
     print("Yearly heating demand for a {} house from DemGen is {:.2f} kWh "
-          "with an average of {:.2f} kW".format(house_type, yearly_heat_demand, average_heat_demand))
+          "with an average of {:.2f} kW and a peak of {:.2f} kW"
+          .format(house_type, yearly_heat_demand, average_heat_demand, max_heat_demand))
     yearly_cold_demand = sum(cold_demand) / 1000    # in kWh
     average_cold_demand = (sum(cold_demand) / len(cold_demand)) / 1000  # in kW
+    max_cold_demand = max(cold_demand) / 1000  # in kW per step
     print("Yearly cooling demand for a {} house from DemGen is {:.2f} kWh "
-          "with an average of {:.2f} kW".format(house_type, yearly_cold_demand, average_cold_demand))
+          "with an average of {:.2f} kW and a peak of {:.2f} kW"
+          .format(house_type, yearly_cold_demand, average_cold_demand, max_cold_demand))
 
     if plot_demand:
-        plt.plot(heat_demand)
-        plt.ylabel('heat demand, sum={:.2f} kWh'.format(yearly_cold_demand))
-        plt.show()
         plt.plot(cold_demand)
-        plt.ylabel('heat demand, sum={:.2f} kWh'.format(yearly_cold_demand))
+        plt.plot(heat_demand)
+        plt.ylabel('heat and cold demand in Watt'.format(yearly_cold_demand, yearly_heat_demand))
+        plt.title('Heat and Cold Demand for DemGen, housetype={} \n'
+                  'total cold={:.0f} kWh, total heat={:.0f} kWh \n'
+                  'peak cold={:.2f} kW, peak heat={:.2f} kW'
+                  .format(house_type, yearly_cold_demand, yearly_heat_demand, max_cold_demand, max_heat_demand))
         plt.show()
 
     # stretch out the list to match a given output interval. F.e: [2,4] -> steps = 3 ->[2,2,2,4,4,4]
