@@ -11,6 +11,8 @@ import fnmatch
 import platform
 from PIL import Image
 
+from wp_3_2_destest.Network.NetworkSizing.destest_uesgraphs_jonas import import_demands_from_demgen
+
 
 def main():
     # ------------------------------ paths -----------------------------
@@ -23,10 +25,23 @@ def main():
     dir_models = dir_sciebo + "/models"
     dir_output = dir_sciebo + "/plots"
 
+    # ------- compute KPIs -------
+    compute_w_tot(dir_sciebo, case="case1")
+    compute_w_tot(dir_sciebo, case="basecase")
+
+    compute_gwi(dir_sciebo, case="case1")
+    compute_gwi(dir_sciebo, case="basecase")
+
+    compute_op(dir_sciebo, case="case1")
+    compute_op(dir_sciebo, case="basecase")
+
+
     changing_vars, study_df_reduced = reduce_and_update_study_df(dir_models)
 
     # --------------------- get a list of all variables --------------------------
     all_vars_lst = read_trajectory_names_folder(res_dir=dir_models, only_from_first_sim=True)
+    demands_lst = ['networkModel.SimpleDistrict_7dhw_input', 'networkModel.SimpleDistrict_7heat_input',
+                   'networkModel.SimpleDistrict_7cold_input']
 
     # ---------------------------- making sublists ----------------------------
     all_sublists = {}
@@ -42,15 +57,17 @@ def main():
     add_to_sublists(all_sublists, 'P_el_Substations', all_vars_lst, 'P_el')
     add_to_sublists(all_sublists, 'P_el_central_Pump', all_vars_lst, 'Supply.fan.P')
     add_to_sublists(all_sublists, 'P_el_central_heater', all_vars_lst, 'Supply.heater.Q_flow')
+    to_comb_sublist(all_sublists, 'Supp_and_Ret_Temps', all_vars_lst, 'senTem_supply.T', 'del1.T')
+    add_to_sublists(all_sublists, 'Demands', demands_lst)
 
     # ---------------------- converting the mat files to dataframes, takes long! -----------------------
     res_dict = mat_files_filtered_to_dict(res_dir=dir_models, var_lst=all_vars_lst)
 
     # ------------------------------ test plotting ----------------------------------
-    fig_lst = plot_from_df_looped(res_dict, dir_output, var_lst=all_sublists['P_el_central_Pump'],
-                                  plot_style="Single Variable", dir_models=dir_models,
-                                  y_label='P_el_central_Pump', save_figs=True)
-    plt.show()
+    # fig_lst = plot_from_df_looped_sns(res_dict, dir_output, var_lst=all_sublists['Supply_Temp_Substation'],
+    #                               plot_style="Single Variable", dir_models=dir_models,
+    #                               y_label='Supply_Temp_Substation', save_figs=True)
+    # plt.show()
 
     # ------------------------------------------- Streamlit ------------------------------------------------------
     st.sidebar.title("Data Selection for Destest")
@@ -265,7 +282,28 @@ def find(pattern, path):
     return results
 
 
-def make_sublist(description, input_var_lst, sig1="", sig2="", anti_sig1=""):
+def make_sublist(input_var_lst, sig1="", end="", anti_sig1=""):
+    """
+    Makes a sublist of a list, depending on the signal words given. This is useful for plotting a specific
+    subset of variables. Returns the list together with its description as a dictionary.
+
+    :param input_var_lst: list      input list
+    :param sig1: String             String that should be included in the sublists results
+                                    Examples: pipe, demand, networkModel.supply
+    :param end: String              End String of the Variable. Examples: .vol.T,
+    :param anti_sig1: String        String that shouldn't be included in th sublists results. Examples: R,
+    :return sub_var_lst1: list      sublist
+    """
+    sublist = [i for i in input_var_lst if sig1 in i]
+    if end:
+        sublist = [i for i in sublist if i.endswith(end)]
+    if anti_sig1:
+        sublist = [i for i in sublist if anti_sig1 not in i]
+
+    return sublist
+
+
+def to_comb_sublist(master_sublists_dict, description, input_var_lst, sig1, sig2):
     """
     Makes a sublist of a list, depending on the signal words given. This is useful for plotting a specific
     subset of variables. Returns the list together with its description as a dictionary.
@@ -275,16 +313,20 @@ def make_sublist(description, input_var_lst, sig1="", sig2="", anti_sig1=""):
     :param sig1: String             String that should be included in the sublists results
                                     Examples: pipe, demand, networkModel.supply
     :param sig2: String             String that should be included in the sublists results. Examples: .vol.T,
-    :param anti_sig1: String        String that shouldn't be included in th sublists results. Examples: R,
     :return sub_var_lst1: list      sublist
     """
-    sublist = [i for i in input_var_lst if sig1 in i]
-    if sig2:
-        sublist = [i for i in sublist if sig2 in i]  # instead of i.endswith("str")
-    if anti_sig1:
-        sublist = [i for i in sublist if anti_sig1 not in i]
+    sublist1 = [i for i in input_var_lst if sig1 in i]
+    sublist2 = [i for i in input_var_lst if sig2 in i]
 
-    return sublist
+    sublist = sublist1 + sublist2
+
+    if len(sublist) > 0:
+        master_sublists_dict.update({description: sublist})
+    else:
+        raise Exception("the Created Sublist {} has no entries,"
+                        "check the input signals of the add_to_sublists function!".format(description))
+
+    return {description: sublist}
 
 
 def add_to_sublists(master_sublists_dict, description, input_var_lst, sig1="", sig2="", anti_sig1=""):
@@ -317,7 +359,7 @@ def add_to_sublists(master_sublists_dict, description, input_var_lst, sig1="", s
     return {description: sublist}
 
 
-def matfile_to_df(res_path, var_lst, output_interval="hours"):
+def matfile_to_df(res_path, var_lst, output_interval):
     """
     Takes the .mat file from the result path and saves it as a SimRes Instance. The variables given in the var_lst list
     are then converted to a pandas dataframe.   (... further explanation ...) The dataframe is then returned.
@@ -367,7 +409,7 @@ def mat_files_filtered_to_dict(res_dir, var_lst, savename_append="", save_to_csv
 
     print("Importing {x} .mat files to Dataframes".format(x=str(len(mat_files))))
     for mat_file in mat_files:
-        res_df = matfile_to_df(res_path=mat_file, var_lst=var_lst)
+        res_df = matfile_to_df(res_path=mat_file, var_lst=var_lst, output_interval="seconds")
         if save_to_csv:
             print("Converting the Dataframe to a CSV ... This could take some minutes!")
             savename_csv = mat_file.split("/")[-1][:-4], savename_append
@@ -519,10 +561,11 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, dir_
             ax.xaxis.set_major_locator(date_loc)
 
             labs = [line.get_label() for line in lines]
-            ax.legend(lines, labs, loc="best", borderaxespad=0.2, ncol=1, fontsize=8)
+            ax.legend(lines, labs, loc="best", borderaxespad=0.2, ncol=1, fontsize=12)
             fig.autofmt_xdate(rotation=45, ha="center")
 
             fig_lst.append(fig)
+            plt.show()
 
             if save_figs:
                 if not os.path.exists(dir_output):
@@ -564,16 +607,21 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, dir_
             ax.set_ylabel(y_label.replace("_", " "))
             ax.set_xlabel("Time in Date")
 
-            date_form = mdates.DateFormatter('%b')
-            date_loc = mdates.MonthLocator()
-            ax.xaxis.set_major_formatter(date_form)
-            ax.xaxis.set_major_locator(date_loc)
+            # ax.set_xlim([pd.Timestamp('2019-03-01'), pd.Timestamp('2019-05-01')])
+
+            # date_form = mdates.DateFormatter('%b')
+            # date_loc = mdates.MonthLocator()
+            # ax.xaxis.set_major_formatter(date_form)
+            # ax.xaxis.set_major_locator(date_loc)
+
+
 
             labs = [line.get_label() for line in lines]
-            ax.legend(lines, labs, loc="best", borderaxespad=0.5, ncol=2, fontsize=8)
+            ax.legend(lines, labs, loc="best", borderaxespad=0.5, ncol=2, fontsize=10)
             fig.autofmt_xdate(rotation=45, ha="center")
 
             fig_lst.append(fig)
+            plt.show()
 
             if save_figs:
                 if not os.path.exists(dir_output):
@@ -613,10 +661,10 @@ def plot_from_df_looped_sns(res_dict, dir_output, var_lst, y_label, plot_style, 
     #     y_label=selected_sublist_description)
 
     fig_lst = []  # for return statement
-    long_sim_titles = False
+    long_sim_titles = True
     plt.style.use("/Users/jonasgrossmann/git_repos/matplolib-style/ebc.paper.mplstyle")
     sns.set()
-    sns.set_context("paper", rc={"lines.linewidth": 0.5})  # style of the plot
+    sns.set_context("paper", rc={"lines.linewidth": 1.5})  # style of the plot
     # sns.set_palette(sns.color_palette(eonerc_colors))     # eventually use costum colours?
     changing_vars, study_df_reduced = reduce_and_update_study_df(dir_models)
 
@@ -660,6 +708,7 @@ def plot_from_df_looped_sns(res_dict, dir_output, var_lst, y_label, plot_style, 
             fig.autofmt_xdate(rotation=45, ha="center")
 
             fig_lst.append(fig)
+            plt.show()
 
             if save_figs:
                 if not os.path.exists(dir_output):
@@ -698,14 +747,22 @@ def plot_from_df_looped_sns(res_dict, dir_output, var_lst, y_label, plot_style, 
                 data_df[sim_title] = var_df[sim_title]  # add to the data_df
 
             # ----- Plot ------
-            sns.lineplot(data=data_df, dashes=False)
+            fig, ax = plt.subplots()
+            fig = sns.lineplot(data=data_df, dashes=False)
             # legend = plt.legend(bbox_to_anchor=(0, 1.02, 1, 1), loc="lower left",
             #            mode="expand", borderaxespad=0, ncol=2)
-            legend = plt.legend(loc='best', ncol=8, fontsize=5)
+            legend = plt.legend(loc='best', ncol=8, fontsize=10)
             plt.title(var)
             # plt.tight_layout()
+
+            # date_form = mdates.DateFormatter('%b')
+            # date_loc = mdates.MonthLocator()
+            # ax.xaxis.set_major_formatter(date_form)
+            # ax.xaxis.set_major_locator(date_loc)
+
             fig = plt.gcf()  # get current figure
             fig_lst.append(fig)
+            plt.show()
 
             # ----- Save Figure ------
             if save_figs:
@@ -715,6 +772,328 @@ def plot_from_df_looped_sns(res_dict, dir_output, var_lst, y_label, plot_style, 
                 # fig.savefig(os.path.join(dir_output, var + "_" + savename_append + ".png"), dpi=600)
 
     return fig_lst
+
+
+def compute_w_tot(dir_sciebo, case):
+    """
+    right now olny works with one .mat file at a time!
+
+    :param dir_sciebo:
+    :param case:
+    :return:
+    """
+
+    if case == 'case1':
+
+        # get lists of variable names
+        dir_case1 = dir_sciebo + "/saved_models/case1"
+        case1_vars_lst = read_trajectory_names_folder(res_dir=dir_case1, only_from_first_sim=True)
+        power_central_pump = make_sublist(case1_vars_lst, 'Supply.fan.P')
+        power_substation = make_sublist(case1_vars_lst, end='heaPum.P_el.y')
+        power_central_hp = make_sublist(case1_vars_lst, end='Supply.rev_hea_pum.P')
+
+        # get the mat file
+        mat_file = find("*.mat", dir_case1)[0]  # find function yields a list
+
+        # central pump
+        power_central_pump_df = matfile_to_df(res_path=mat_file, var_lst=power_central_pump, output_interval="seconds")
+        timedelta = power_central_pump_df.index[1] - power_central_pump_df.index[0]
+        timedelta_sec = timedelta.seconds   # timestep width of the data
+        w_tot_central_pump = [p * timedelta_sec for p in power_central_pump_df.sum()]   # in Ws
+        w_tot_central_pump = [total_elec / (3600*1000) for total_elec in w_tot_central_pump]    # in kWh
+        w_tot_central_pump = sum(w_tot_central_pump)
+
+        # central reversible Heatpump
+        power_central_hp_df = matfile_to_df(res_path=mat_file, var_lst=power_central_hp, output_interval="seconds")
+        timedelta = power_central_hp_df.index[1] - power_central_hp_df.index[0]
+        timedelta_sec = timedelta.seconds  # timestep width of the data
+        w_tot_central_hp = [p * timedelta_sec for p in power_central_hp_df.sum()]  # in Ws
+        w_tot_central_hp = [total_elec / (3600 * 1000) for total_elec in w_tot_central_hp]  # in kWh
+        w_tot_central_hp = sum(w_tot_central_hp)
+
+        # substations
+        power_substations_df = matfile_to_df(res_path=mat_file, var_lst=power_substation, output_interval="seconds")
+        timedelta = power_substations_df.index[1] - power_substations_df.index[0]
+        timedelta_sec = timedelta.seconds  # timestep width of the data
+        w_tot_substations = [p * timedelta_sec for p in power_substations_df.sum()]  # in Ws
+        w_tot_substations = [total_elec / (3600 * 1000) for total_elec in w_tot_substations]  # in kWh
+        w_tot_substations = sum(w_tot_substations)
+
+        print("--- Case1: --- \n"
+              "W_tot Substation HPs: {:.2f} kWh \n"
+              "W_tot central Pump: {:.2f} kWh \n"
+              "W_tot central Heatpump: {:.2f} kWh"
+              .format(w_tot_substations, w_tot_central_pump, w_tot_central_hp))
+
+        w_tot = w_tot_central_pump + w_tot_substations  # kWh
+
+    elif case == 'basecase':
+
+        # get lists of variable names
+        dir_basecase = dir_sciebo + "/saved_models/basecase"
+        basecase_vars_lst = read_trajectory_names_folder(res_dir=dir_basecase, only_from_first_sim=True)
+        power_central_pump = make_sublist(basecase_vars_lst, 'Supply.fan.P')
+
+        # get the mat file
+        mat_file = find("*.mat", dir_basecase)[0]  # find function yields a list
+
+        # ----- central pump -----
+        power_central_pump_df = matfile_to_df(res_path=mat_file, var_lst=power_central_pump, output_interval="seconds")
+        timedelta = power_central_pump_df.index[1] - power_central_pump_df.index[0]
+        timedelta_sec = timedelta.seconds  # timestep width of the data
+        w_tot_central_pump = [p * timedelta_sec for p in power_central_pump_df.sum()]  # in Ws
+        w_tot_central_pump = [total_elec / (3600 * 1000) for total_elec in w_tot_central_pump]  # in kWh
+        w_tot_central_pump = sum(w_tot_central_pump)
+
+        # ----- individual chillers -----
+        x, cold_demand = import_demands_from_demgen(dir_sciebo, house_type='Old', output_interval=3600)    # Wh
+        total_cold_dem = sum(cold_demand)/1000  # kWh
+        cop_cc = 5
+        w_tot_cc = total_cold_dem/cop_cc
+
+        print("--- BaseCase: --- \n"
+              "W_tot Substation Chillers: {:.2f} kWh \n"
+              "W_tot central Pump: {:.2f} kWh"
+              .format(w_tot_cc, w_tot_central_pump))
+
+        w_tot = w_tot_central_pump + w_tot_cc  # kWh
+
+    else:
+        w_tot = 0
+        raise Exception("wrong case")
+
+    return w_tot    # kWh
+
+
+def compute_gwi(dir_sciebo, case):
+    """
+    right now only works with one .mat file at a time!
+
+    :param dir_sciebo:
+    :param case:
+    :return:
+    """
+
+    if case == 'case1':
+
+        w_tot = compute_w_tot(dir_sciebo, case="case1")
+        k_co2 = 0.468   #kg co2 per kWh Strom https://www.umweltbundesamt.de/presse/pressemitteilungen/bilanz-2019-co2-emissionen-pro-kilowattstunde-strom
+        gwi = w_tot * k_co2
+
+        print("--- Case1: --- \n"
+              "GWI: {:.2f} kg CO2"
+              .format(gwi))
+
+    elif case == 'basecase':
+
+        # get lists of variable names
+        dir_basecase = dir_sciebo + "/saved_models/basecase"
+        basecase_vars_lst = read_trajectory_names_folder(res_dir=dir_basecase, only_from_first_sim=True)
+        q_flow_central_heater = make_sublist(basecase_vars_lst, end='Supply.heater.Q_flow')
+
+        # get the mat file
+        mat_file = find("*.mat", dir_basecase)[0]  # find function yields a list
+
+        # central heater
+        q_flow_central_heater_df = matfile_to_df(mat_file, var_lst=q_flow_central_heater, output_interval="seconds")
+        timedelta = q_flow_central_heater_df.index[1] - q_flow_central_heater_df.index[0]
+        timedelta_sec = timedelta.seconds  # timestep width of the data
+        q_tot_central_heater = [p * timedelta_sec for p in q_flow_central_heater_df.sum()]  # in Ws
+        q_tot_central_heater = [q_flow / (3600 * 1000) for q_flow in q_tot_central_heater]  # in kWh
+        q_tot_central_heater = sum(q_tot_central_heater)
+
+        eta_heater = 0.9            # guess
+        kWh_per_kg_coal = 4.17      # https://www.agrarplus.at/heizwerte-aequivalente.html
+        kg_co2_per_kg_coal = 3.25   # https://www.bund-nrw.de/themen/braunkohle/hintergruende-und-publikationen/braunkohle-und-umwelt/braunkohle-und-klima/
+
+        gwi_central_heater = (q_tot_central_heater*kg_co2_per_kg_coal)/(eta_heater*kWh_per_kg_coal)  # in kg
+
+        w_tot = compute_w_tot(dir_sciebo, case="basecase")
+        k_co2 = 0.468  # kg co2 per kWh Strom https://www.umweltbundesamt.de/presse/pressemitteilungen/bilanz-2019-co2-emissionen-pro-kilowattstunde-strom
+        gwi_elec = w_tot * k_co2
+
+        gwi = gwi_central_heater + gwi_elec
+
+        print("--- Basecase: --- \n"
+              "GWI: {:.2f} kg CO2"
+              .format(gwi))
+
+    else:
+        gwi = 0
+        raise Exception("wrong case")
+
+    return gwi    # kWh
+
+
+def compute_op(dir_sciebo, case):
+    """
+    right now only works with one .mat file at a time!
+
+    :param dir_sciebo:
+    :param case:
+    :return:
+    """
+
+    if case == 'case1':
+
+        w_tot = compute_w_tot(dir_sciebo, case="case1")
+        price_w_tot = 0.25    # € per kWh Strom
+        op_w_tot = w_tot * price_w_tot
+
+        gwi = compute_gwi(dir_sciebo, case="case1")
+        price_gwi = 0.03    # 30€ per Ton -> 0,3€ per kg CO2
+        op_gwi = gwi * price_gwi
+
+        op = op_gwi + op_w_tot
+
+
+        print("--- Case1: --- \n"
+              "OP: {:.2f} €"
+              .format(gwi))
+
+    elif case == 'basecase':
+
+        # get lists of variable names
+        dir_basecase = dir_sciebo + "/saved_models/basecase"
+        basecase_vars_lst = read_trajectory_names_folder(res_dir=dir_basecase, only_from_first_sim=True)
+        q_flow_central_heater = make_sublist(basecase_vars_lst, end='Supply.heater.Q_flow')
+
+        # get the mat file
+        mat_file = find("*.mat", dir_basecase)[0]  # find function yields a list
+
+        # central heater
+        q_flow_central_heater_df = matfile_to_df(mat_file, var_lst=q_flow_central_heater, output_interval="seconds")
+        timedelta = q_flow_central_heater_df.index[1] - q_flow_central_heater_df.index[0]
+        timedelta_sec = timedelta.seconds  # timestep width of the data
+        q_tot_central_heater = [p * timedelta_sec for p in q_flow_central_heater_df.sum()]  # in Ws
+        q_tot_central_heater = [q_flow / (3600 * 1000) for q_flow in q_tot_central_heater]  # in kWh
+        q_tot_central_heater = sum(q_tot_central_heater)
+
+        eta_heater = 0.9            # guess
+        kWh_per_kg_coal = 4.17      # https://www.agrarplus.at/heizwerte-aequivalente.html
+        kg_co2_per_kg_coal = 3.25   # https://www.bund-nrw.de/themen/braunkohle/hintergruende-und-publikationen/braunkohle-und-umwelt/braunkohle-und-klima/
+
+        m_coal_central_heater = q_tot_central_heater/(eta_heater*kWh_per_kg_coal)  # in kg Brennstoff
+        price_coal = 0.05   # € per kg coal https://markets.businessinsider.com/commodities/coal-price?op=1
+
+        op_central_heater = m_coal_central_heater * price_coal
+
+        w_tot = compute_w_tot(dir_sciebo, case="basecase")
+        price_w_tot = 0.25  # € per kWh Strom
+        op_w_tot = w_tot * price_w_tot
+
+        gwi = compute_gwi(dir_sciebo, case="basecase")
+        price_gwi = 0.03  # 30€ per Ton -> 0,3€ per kg CO2
+        op_gwi = gwi * price_gwi
+
+        op = op_central_heater + op_w_tot + op_gwi
+
+        print("--- Basecase: --- \n"
+              "OP: {:.2f} €"
+              .format(gwi))
+
+    else:
+        op = 0
+        raise Exception("wrong case")
+
+    return op    # kWh
+
+
+def compute_total_elec2(dir_models, dir_sciebo, case, simple=True):
+
+    if case == 'case1':
+        dir_basecase = dir_sciebo + "/saved_models/case1"
+        case1_vars_lst = read_trajectory_names_folder(res_dir=dir_basecase, only_from_first_sim=True)
+
+        power_central_pump = make_sublist(case1_vars_lst, 'Supply.fan.P')
+        power_substation = make_sublist(case1_vars_lst, end='heaPum.P_el.y')
+
+        # make one list
+        power_all = power_central_pump + power_substation
+
+        # for each sim, get a dataframe of the variables
+        power_dict = mat_files_filtered_to_dict(res_dir=dir_models, var_lst=power_all)
+
+        for sim_name in power_dict.keys():  # one sim per plot
+            print(sim_name)
+            result_time_series_df = power_dict[sim_name][power_all]
+            # result_time_series_df.sum()
+            timedelta = result_time_series_df.index[1] - result_time_series_df.index[0]
+            timedelta_sec = timedelta.seconds   # timestep width of the data
+
+            if not simple:
+
+                result_df = pd.DataFrame(columns=[power_all], index=["sum_in_Ws", 'sum_in_kWh'])
+                for var in power_all:
+                    result_df.loc[['sum_in_Ws'], [var]] = result_time_series_df[var].sum() * timedelta_sec
+                    result_df.loc[['sum_in_kWh'], [var]] = result_time_series_df[var].sum() * timedelta_sec/(3600*1000)
+
+            else:
+                total_elec_lst = [total_power * timedelta_sec for total_power in result_time_series_df.sum()]   # in J
+                total_elec_in_kWh_lst = [total_elec / (3600*1000) for total_elec in total_elec_lst]
+                print("Case1: Total Electricity Demand of the Substation and the central Pump is: {} kWh"
+                      .format((sum(total_elec_in_kWh_lst))))
+
+                # print("Case1:\n"
+                #       "W_tot HPs: {} kWh \n"
+                #       "W_tot Central Pump: {} kWh"
+                #       .format(total_elec_cc, total_elec_in_kWh))
+
+    elif case == 'basecase':
+
+        # ----- individual chillers -----
+        x, cold_demand = import_demands_from_demgen(dir_sciebo, house_type='Old', output_interval=1)    # Wh
+        total_cold_dem = sum(cold_demand)/1000  # kWh
+        cop_cc = 5
+        total_elec_cc = total_cold_dem/cop_cc
+
+        # ----- central pump -----
+        dir_basecase = dir_sciebo + "/saved_models/basecase"
+        basecase_vars_lst = read_trajectory_names_folder(res_dir=dir_basecase, only_from_first_sim=True)
+        power_central_pump = make_sublist(basecase_vars_lst, 'Supply.fan.P')
+        power_dict = mat_files_filtered_to_dict(res_dir=dir_basecase, var_lst=power_central_pump)
+
+        for sim_name in power_dict.keys():  # one sim per plot
+            print(sim_name)
+            result_time_series_df = power_dict[sim_name][power_central_pump]
+            timedelta = result_time_series_df.index[1] - result_time_series_df.index[0]
+            timedelta_sec = timedelta.seconds  # timestep width of the data
+
+            # sum of all time steps
+            total_elec_lst = [total_power * timedelta_sec for total_power in
+                              result_time_series_df.sum()]  # in Ws=Joule
+            total_elec_in_kWh_lst = [total_elec / (3600 * 1000) for total_elec in total_elec_lst]
+
+            # sum of all variables
+            total_elec_in_kWh = sum(total_elec_in_kWh_lst)
+
+            tooootal = total_elec_in_kWh + total_elec_cc
+
+            print("BaseCase:\n"
+                  "W_tot Chillers: {} kWh \n"
+                  "W_tot Central Pump: {} kWh"
+                  .format(total_elec_cc, total_elec_in_kWh))
+
+    else:
+        raise Exception("wrong case")
+
+
+    print("stop")
+    # --- BaseCase
+    # central pump
+    # cold demand * efficiency indiviual chillers
+
+
+    # ---- addd everything together
+
+    # return
+
+
+
+
+
+    return "KPI"
+
 
 
 # unused function
