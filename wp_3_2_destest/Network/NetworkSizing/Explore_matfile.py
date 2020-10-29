@@ -11,7 +11,7 @@ import fnmatch
 import platform
 from PIL import Image
 
-from wp_3_2_destest.Network.NetworkSizing.destest_uesgraphs_jonas import import_demands_from_demgen
+from wp_3_2_destest.Network.NetworkSizing.destest_uesgraphs_jonas import import_demands_from_demgen  # no streamlit
 
 
 def main():
@@ -22,21 +22,19 @@ def main():
         dir_sciebo = "D:/mma-jgr/sciebo-folder/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data"
     else:
         raise Exception("Unknown operating system")
+
     dir_models = dir_sciebo + "/models"
+    dir_case1_some = dir_sciebo + "/saved_models/case1_some"
+    dir_case1 = dir_sciebo + "/saved_models/case1"
+    dir_basecase = dir_sciebo + "/saved_models/basecase"
     dir_output = dir_sciebo + "/plots"
 
     # ------- compute KPIs -------
-    compute_w_tot(dir_sciebo, case="case1")
-    compute_w_tot(dir_sciebo, case="basecase")
+    changing_vars_bc, study_df_reduced_bc = compute_all_KPIs(dir_sciebo=dir_sciebo,
+                                                             dir_case=dir_basecase, case="CaseBase")
 
-    compute_gwi(dir_sciebo, case="case1")
-    compute_gwi(dir_sciebo, case="basecase")
-
-    compute_op(dir_sciebo, case="case1")
-    compute_op(dir_sciebo, case="basecase")
-
-
-    changing_vars, study_df_reduced = reduce_and_update_study_df(dir_models)
+    changing_vars_c1, study_df_reduced_c1 = compute_all_KPIs(dir_sciebo=dir_sciebo,
+                                                             dir_case=dir_case1, case="Case1")
 
     # --------------------- get a list of all variables --------------------------
     all_vars_lst = read_trajectory_names_folder(res_dir=dir_models, only_from_first_sim=True)
@@ -45,10 +43,13 @@ def main():
 
     # ---------------------------- making sublists ----------------------------
     all_sublists = {}
+    # --- pipes ---
+    add_to_sublists(all_sublists, 'Fluid_Velocity', all_vars_lst, ".cor.del.v", "pipe")
     # add_to_sublists(all_sublists, 'Mass Flow Supply Pipes', all_vars_lst, "senMasFlo.m_flow", "pipe", "R")
     # add_to_sublists(all_sublists, 'Mass Flow Return Pipes', all_vars_lst, "senMasFlo.m_flow", "R", "")
     # add_to_sublists(all_sublists, 'Supply and Return Temperatures', all_vars_lst, "senT", ".T", "")
     # add_to_sublists(all_sublists, 'Supply Variables', all_vars_lst, "networkModel.supply")
+
     add_to_sublists(all_sublists, 'Electrical_Power_Demand_Heatpump', all_vars_lst, 'heaPum.P')
     add_to_sublists(all_sublists, 'Return_Temp_Substations_after_del', all_vars_lst, 'del1.T')
     add_to_sublists(all_sublists, 'Return_Temp_Substations_before_del', all_vars_lst, 'senTem_return.T')
@@ -56,7 +57,7 @@ def main():
     add_to_sublists(all_sublists, 'Supply_Temp_Substation', all_vars_lst, 'senTem_supply.T')
     add_to_sublists(all_sublists, 'P_el_Substations', all_vars_lst, 'P_el')
     add_to_sublists(all_sublists, 'P_el_central_Pump', all_vars_lst, 'Supply.fan.P')
-    add_to_sublists(all_sublists, 'P_el_central_heater', all_vars_lst, 'Supply.heater.Q_flow')
+    # add_to_sublists(all_sublists, 'P_el_central_heater', all_vars_lst, 'Supply.heater.Q_flow')  # only in BaseCase
     to_comb_sublist(all_sublists, 'Supp_and_Ret_Temps', all_vars_lst, 'senTem_supply.T', 'del1.T')
     add_to_sublists(all_sublists, 'Demands', demands_lst)
 
@@ -305,9 +306,9 @@ def make_sublist(input_var_lst, sig1="", end="", anti_sig1=""):
 
 def to_comb_sublist(master_sublists_dict, description, input_var_lst, sig1, sig2):
     """
-    Makes a sublist of a list, depending on the signal words given. This is useful for plotting a specific
-    subset of variables. Returns the list together with its description as a dictionary.
+    Combines to sublists to a single sublist. Returns the list together with its description as a dictionary.
 
+    :param master_sublists_dict:    dictionary that stores all the sublists as values and their description as keys
     :param description: String      description of the variables inside the output sublist
     :param input_var_lst: list      input list
     :param sig1: String             String that should be included in the sublists results
@@ -329,7 +330,7 @@ def to_comb_sublist(master_sublists_dict, description, input_var_lst, sig1, sig2
     return {description: sublist}
 
 
-def add_to_sublists(master_sublists_dict, description, input_var_lst, sig1="", sig2="", anti_sig1=""):
+def add_to_sublists(master_sublists_dict, description, input_var_lst, end="", sig1="", sig2="", anti_sig1=""):
     """
     Makes a sublist of a list, depending on the signal words given. This is useful for plotting a specific
     subset of variables. Returns the list together with its description as a key:value pair. Adds this pair to the
@@ -338,6 +339,7 @@ def add_to_sublists(master_sublists_dict, description, input_var_lst, sig1="", s
     :param master_sublists_dict:    dictionary that stores all the sublists as values and their description as keys
     :param description: String      description of the variables inside the output sublist
     :param input_var_lst: list      input list
+    :param end: String              String with which the variable ends, e.g ".fan.P"
     :param sig1: String             String that should be included in the sublists results
                                     Examples: pipe, demand, networkModel.supply
     :param sig2: String             String that should be included in the sublists results. Examples: .vol.T,
@@ -349,6 +351,8 @@ def add_to_sublists(master_sublists_dict, description, input_var_lst, sig1="", s
         sublist = [i for i in sublist if sig2 in i]  # instead of i.endswith("str")
     if anti_sig1:
         sublist = [i for i in sublist if anti_sig1 not in i]
+    if end:
+        sublist = [i for i in sublist if i.endswith(end)]
 
     if len(sublist) > 0:
         master_sublists_dict.update({description: sublist})
@@ -359,7 +363,8 @@ def add_to_sublists(master_sublists_dict, description, input_var_lst, sig1="", s
     return {description: sublist}
 
 
-def matfile_to_df(res_path, var_lst, output_interval):
+@st.cache(persist=True)
+def matfile_to_df(res_path, var_lst, output_interval="seconds", s_step=600):
     """
     Takes the .mat file from the result path and saves it as a SimRes Instance. The variables given in the var_lst list
     are then converted to a pandas dataframe.   (... further explanation ...) The dataframe is then returned.
@@ -367,6 +372,7 @@ def matfile_to_df(res_path, var_lst, output_interval):
     :param var_lst:     list:       variable names
     :param output_interval:         specify if your output interval is in seconds or hours.
                                     Should be the same as inside your uesgraphs create_model function.
+    :param s_step:      int:        timestep in seconds, f.e.: 600s=10min, 900s=15min
     :return: res_df:    pandas df:  results
     """
     if not os.path.isfile(res_path):
@@ -381,7 +387,7 @@ def matfile_to_df(res_path, var_lst, output_interval):
     res_df = res_df.groupby(res_df.index).first()
 
     if output_interval == "seconds":
-        res_df = res_df[res_df.index.isin(range(0, 31536000, 900))]
+        res_df = res_df[res_df.index.isin(range(0, 31536000, s_step))]
         res_df.index = res_df.index.astype(int)
         res_df.index = pd.to_datetime(res_df.index, unit="s", origin="2019")
     elif output_interval == "hours":
@@ -389,6 +395,8 @@ def matfile_to_df(res_path, var_lst, output_interval):
         res_df.index = res_df.index.astype(int)
         # res_df.index = pd.to_datetime(res_df.index, unit="h", origin="2019") #-> to_datetime has no Unit "Hour"
         res_df.index = pd.Timestamp('2019-01-01') + pd.to_timedelta(res_df.index, unit='H')
+    else:
+        raise Exception("Unknown Output Interval")
     return res_df
 
 
@@ -419,70 +427,45 @@ def mat_files_filtered_to_dict(res_dir, var_lst, savename_append="", save_to_csv
     return res_dict
 
 
-def reduce_and_update_study_df(dir_models, model_prefix="Destest_Jonas", update_csv_files=True):
+def reduce_and_update_study_df(dir_models, model_prefix="Case"):
     """
     Takes the study.csv and converts it into a dataframe.
     Then finds the parameter that is changing inside the parameter study and returns it,
     as well as a reduced version of the study.csv, which only contains the variable names that are changing.
     :param dir_models:          csv that holds the simulation study info
     :param model_prefix:        search string for the model names
-    :param update_csv_files:    decide to update the csv files after sims are deleted
     :return:
     """
     dir_models = Path(dir_models)
-    study_csv = dir_models/"study.csv"
-    curr_study_csv = dir_models / "curr_study.csv"
+    study_df = pd.read_csv(dir_models/"study.csv", index_col=0)
 
-    # if theres no curr_study_csv yet, coply the study.csv
-    if not curr_study_csv.is_file():
-        shutil.copy(study_csv, curr_study_csv)
-
-    # study.csv was created from automated_network_simulation, should always stay the same!
-    study_df = pd.read_csv(study_csv, index_col=0)
     sims_study_df = list(study_df.index.values)
 
-    curr_study_df = pd.read_csv(curr_study_csv, index_col=0)
-    sims_curr_study_df = list(curr_study_df.index.values)
-
-    # udate curr_study_df
-
-    # 1) remove sims from curr_study_df that are in curr_study_df but not in the folder
+    # Update: remove sims from study_df that are not anymore in the folder (-> deleted)
     curr_sims = [child.name for child in dir_models.iterdir() if model_prefix in child.name]
-    sims_to_remove = [sim for sim in sims_curr_study_df if sim not in curr_sims]
-    curr_study_df = curr_study_df.drop(index=sims_to_remove)
-
-    # 2) add sims to curr_study_df that are in the folder but not in curr_study_df,
-    # condition: they have to be in the original study_df
-
-    # # all_deleted_sims = [sim for sim in all_sims if sim not in curr_sims]
-    # deleted_sims = [sim for sim in sims_study_df if sim not in sims_curr_study_df]
-    #
-    # if len(sims_curr_study_df) > len(curr_sims):
-    #     curr_study_df = curr_study_df.drop(index=deleted_sims)  # drop deleted sims
-    # elif len(sims_curr_study_df) < len(curr_sims):
-    #     pass
-    #     # Todo: re add re_added_sim with the info from the original study_df
-    #     # re_added_sims = [sim for sim in curr_sims if sim not in curr_sims_in_df]
-    #     # not_re_added_sim = [sim for sim in curr_sims if sim in curr_sims_in_df]
-    #     # re_added_df = study_df.drop(index=not_re_added_sim)
-    #     # curr_study_df = curr_study_df.append(re_added_df)
+    sims_to_remove = [sim for sim in sims_study_df if sim not in curr_sims]
+    study_df = study_df.drop(index=sims_to_remove)
 
     # reduce df: remove columns that have only constants
-    curr_study_df_reduced = reduce_df(curr_study_df)
+    study_df_reduced = reduce_df(study_df)
 
-    # make list [Sim 1, Sim 2..], add it as a new column to the dataframe and put at first colum position
-    curr_study_df_reduced = curr_study_df_reduced.sort_index()  # for assigning short sim names in ascending order
-    short_sim_names = ['Sim ' + str(x + 1) for x in range(len(curr_study_df.index))]
-    curr_study_df_reduced['short_sim_name'] = short_sim_names
-    cols = ['short_sim_name'] + [col for col in curr_study_df_reduced if col != 'short_sim_name']
-    curr_study_df_reduced = curr_study_df_reduced[cols]
+    # make list [Sim 1, Sim 2..], add it as a new column to the dataframe and put at first column position
+    study_df_reduced = study_df_reduced.sort_index()  # for assigning short sim names in ascending order
+    short_sim_names = ['Sim ' + str(x + 1) for x in range(len(study_df.index))]
+    study_df_reduced['short_sim_name'] = short_sim_names
+    cols = ['short_sim_name'] + [col for col in study_df_reduced if col != 'short_sim_name']
+    study_df_reduced = study_df_reduced[cols]
 
-    # save new and old version as csv files
-    curr_study_df_reduced.to_csv(dir_models/"curr_study.csv")
+    # Update the csv's
+    study_df_reduced.to_csv(dir_models/"study_reduced.csv")
+    study_df.to_csv(dir_models/"study.csv")
 
-    changing_vars = [var for var in curr_study_df_reduced.columns if 'short_sim_name' not in var]
+    # entries of the study.csv that shouldnt be considered a variable
+    no_vars = ['short_sim_name', 'W_tot_kWh', 'GWI', 'OP']
 
-    return changing_vars, curr_study_df_reduced
+    changing_vars = [var for var in study_df_reduced.columns if var not in no_vars]
+
+    return changing_vars, study_df_reduced
 
 
 def reduce_df(input_df):
@@ -500,8 +483,8 @@ def reduce_df(input_df):
     return input_df_reduced
 
 
-def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, dir_models, savename_append='',
-                        save_figs=False):
+def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, dir_models,
+                        start_date='2019-01-01', end_date='2020-01-01', savename_append='', save_figs=False):
     """
     Creates a Matplotlib figure and plots the variables in 'var_lst'. Saves the figure in 'dir_output'
 
@@ -515,6 +498,8 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, dir_
                                         -> should be a subset of the variables inside res_dict!
                                         -> should be formed with the "add_to_sublists" function
     :param dir_output: String:          path to output directory
+    :param start_date:  String:         Start Date to plot vars in Timestamp-Format, e.g. 2019-01-01
+    :param end_date:    String:         End Date to plot vars in Timestamp-Format, e.g. 2019-02-01
     :param savename_append: String:     Name to save the figures
     :param save_figs: Boolean:          decision to save figures to pdf and png
     :return: fig_lst: list:             list that contains all created figures
@@ -588,37 +573,56 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, dir_
                 var_title = str(var)
 
             plt.title(var_title, fontsize=12, y=1)
-            lines = []
 
-            # this is for naming the legend and drawing the lines
+            # start_date = "2019-01-01"
+            # end_date = "2020-01-01"     # 1 year
+            # end_date = "2019-02-01"     # 1 month
+            # end_date = "2019-01-08"     # 1 week
+            # end_date = "2019-01-02"     # 1 day
+
+            timedelta = pd.Timedelta(pd.Timestamp(end_date) - pd.Timestamp(start_date))
+            if timedelta.days < 3:
+                resample_delta = "600S"  # 10min
+            elif timedelta.days < 14:  # 2 Weeks
+                resample_delta = "1800S"  # 30min
+            elif timedelta.days < 62:  # 2 months
+                resample_delta = "H"  # hourly
+            else:
+                resample_delta = "D"
+
+            # https://matplotlib.org/3.1.1/gallery/ticks_and_spines/date_concise_formatter.html
+            locator = mdates.AutoDateLocator()
+            formatter = mdates.ConciseDateFormatter(locator)
+            formatter.formats = ['%y', '%b', '%d', '%H:%M', '%H:%M', '%S.%f', ]
+            formatter.zero_formats = [''] + formatter.formats[:-1]
+            formatter.zero_formats[3] = '%d-%b'
+            formatter.offset_formats = ['', '%Y', '%b %Y', '%d %b %Y', '%d %b %Y', '%d %b %Y %H:%M', ]
+            ax.xaxis.set_major_locator(locator)
+            ax.xaxis.set_major_formatter(formatter)
+
+            lines = []
+            # naming the legend and drawing the lines
             for sim_name in res_dict.keys():
 
                 line_label = ''
                 for var_x in changing_vars:
                     val_x = study_df_reduced.loc[sim_name][var_x]
-                    line_label_x = str(var_x) + ' = ' + str(val_x) + '\n'
+                    line_label_x = str(var_x.replace("_", " ")) + ' = ' + str(val_x)  # + '\n'
                     line_label += line_label_x
 
                 line_label_short = study_df_reduced.at[sim_name, 'short_sim_name']
 
-                line = ax.plot(res_dict[sim_name][var].resample("D").mean(), linewidth=0.7, label=line_label_short)
+                # resample:H: hourly, D: daily, S: seconds (f.e 600S)
+                line = ax.plot(res_dict[sim_name][var][start_date:end_date].resample(resample_delta).mean(),
+                               linewidth=0.7, label=line_label)
                 lines += line
 
             ax.set_ylabel(y_label.replace("_", " "))
-            ax.set_xlabel("Time in Date")
-
-            # ax.set_xlim([pd.Timestamp('2019-03-01'), pd.Timestamp('2019-05-01')])
-
-            # date_form = mdates.DateFormatter('%b')
-            # date_loc = mdates.MonthLocator()
-            # ax.xaxis.set_major_formatter(date_form)
-            # ax.xaxis.set_major_locator(date_loc)
-
-
+            # ax.set_xlabel("Time in Date")
 
             labs = [line.get_label() for line in lines]
             ax.legend(lines, labs, loc="best", borderaxespad=0.5, ncol=2, fontsize=10)
-            fig.autofmt_xdate(rotation=45, ha="center")
+            # fig.autofmt_xdate(rotation=45, ha="center")
 
             fig_lst.append(fig)
             plt.show()
@@ -628,6 +632,8 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, dir_
                     os.makedirs(dir_output)
                 fig.savefig(os.path.join(dir_output, var + "_" + savename_append + ".pdf"))
                 # fig.savefig(os.path.join(dir_output, var + "_" + savename_append + ".png"), dpi=600)
+        for fig in fig_lst:
+            plt.show()
 
     return fig_lst
 
@@ -774,7 +780,7 @@ def plot_from_df_looped_sns(res_dict, dir_output, var_lst, y_label, plot_style, 
     return fig_lst
 
 
-def compute_w_tot(dir_sciebo, case):
+def compute_w_tot_df(dir_sciebo, dir_case, case):
     """
     right now olny works with one .mat file at a time!
 
@@ -783,317 +789,302 @@ def compute_w_tot(dir_sciebo, case):
     :return:
     """
 
-    if case == 'case1':
+    dir_case = Path(dir_case)   # Pathlib Object
+    study_csv = dir_case/"study.csv"
+    study_df = pd.read_csv(study_csv, index_col=0)
 
-        # get lists of variable names
-        dir_case1 = dir_sciebo + "/saved_models/case1"
-        case1_vars_lst = read_trajectory_names_folder(res_dir=dir_case1, only_from_first_sim=True)
+    # make new column for the KPI
+    kpi_name = 'W_tot_kWh'
+    study_df[kpi_name] = 0
+
+    if case == 'Case1':
+
+        check_case(dir_case=dir_case, case=case)
+
+        # read all variables, get desired of variable names, get the dataframes
+        case1_vars_lst = read_trajectory_names_folder(res_dir=dir_case, only_from_first_sim=True)
         power_central_pump = make_sublist(case1_vars_lst, 'Supply.fan.P')
         power_substation = make_sublist(case1_vars_lst, end='heaPum.P_el.y')
         power_central_hp = make_sublist(case1_vars_lst, end='Supply.rev_hea_pum.P')
+        power_all = power_central_pump + power_substation + power_central_hp
+        power_dict = mat_files_filtered_to_dict(res_dir=dir_case, var_lst=power_all)
 
-        # get the mat file
-        mat_file = find("*.mat", dir_case1)[0]  # find function yields a list
+        # for each sim, compute the KPI and write it to study df reduced -> better normal study.csv?
+        for sim_name in power_dict.keys():
 
-        # central pump
-        power_central_pump_df = matfile_to_df(res_path=mat_file, var_lst=power_central_pump, output_interval="seconds")
-        timedelta = power_central_pump_df.index[1] - power_central_pump_df.index[0]
-        timedelta_sec = timedelta.seconds   # timestep width of the data
-        w_tot_central_pump = [p * timedelta_sec for p in power_central_pump_df.sum()]   # in Ws
-        w_tot_central_pump = [total_elec / (3600*1000) for total_elec in w_tot_central_pump]    # in kWh
-        w_tot_central_pump = sum(w_tot_central_pump)
-
-        # central reversible Heatpump
-        power_central_hp_df = matfile_to_df(res_path=mat_file, var_lst=power_central_hp, output_interval="seconds")
-        timedelta = power_central_hp_df.index[1] - power_central_hp_df.index[0]
-        timedelta_sec = timedelta.seconds  # timestep width of the data
-        w_tot_central_hp = [p * timedelta_sec for p in power_central_hp_df.sum()]  # in Ws
-        w_tot_central_hp = [total_elec / (3600 * 1000) for total_elec in w_tot_central_hp]  # in kWh
-        w_tot_central_hp = sum(w_tot_central_hp)
-
-        # substations
-        power_substations_df = matfile_to_df(res_path=mat_file, var_lst=power_substation, output_interval="seconds")
-        timedelta = power_substations_df.index[1] - power_substations_df.index[0]
-        timedelta_sec = timedelta.seconds  # timestep width of the data
-        w_tot_substations = [p * timedelta_sec for p in power_substations_df.sum()]  # in Ws
-        w_tot_substations = [total_elec / (3600 * 1000) for total_elec in w_tot_substations]  # in kWh
-        w_tot_substations = sum(w_tot_substations)
-
-        print("--- Case1: --- \n"
-              "W_tot Substation HPs: {:.2f} kWh \n"
-              "W_tot central Pump: {:.2f} kWh \n"
-              "W_tot central Heatpump: {:.2f} kWh"
-              .format(w_tot_substations, w_tot_central_pump, w_tot_central_hp))
-
-        w_tot = w_tot_central_pump + w_tot_substations  # kWh
-
-    elif case == 'basecase':
-
-        # get lists of variable names
-        dir_basecase = dir_sciebo + "/saved_models/basecase"
-        basecase_vars_lst = read_trajectory_names_folder(res_dir=dir_basecase, only_from_first_sim=True)
-        power_central_pump = make_sublist(basecase_vars_lst, 'Supply.fan.P')
-
-        # get the mat file
-        mat_file = find("*.mat", dir_basecase)[0]  # find function yields a list
-
-        # ----- central pump -----
-        power_central_pump_df = matfile_to_df(res_path=mat_file, var_lst=power_central_pump, output_interval="seconds")
-        timedelta = power_central_pump_df.index[1] - power_central_pump_df.index[0]
-        timedelta_sec = timedelta.seconds  # timestep width of the data
-        w_tot_central_pump = [p * timedelta_sec for p in power_central_pump_df.sum()]  # in Ws
-        w_tot_central_pump = [total_elec / (3600 * 1000) for total_elec in w_tot_central_pump]  # in kWh
-        w_tot_central_pump = sum(w_tot_central_pump)
-
-        # ----- individual chillers -----
-        x, cold_demand = import_demands_from_demgen(dir_sciebo, house_type='Old', output_interval=3600)    # Wh
-        total_cold_dem = sum(cold_demand)/1000  # kWh
-        cop_cc = 5
-        w_tot_cc = total_cold_dem/cop_cc
-
-        print("--- BaseCase: --- \n"
-              "W_tot Substation Chillers: {:.2f} kWh \n"
-              "W_tot central Pump: {:.2f} kWh"
-              .format(w_tot_cc, w_tot_central_pump))
-
-        w_tot = w_tot_central_pump + w_tot_cc  # kWh
-
-    else:
-        w_tot = 0
-        raise Exception("wrong case")
-
-    return w_tot    # kWh
-
-
-def compute_gwi(dir_sciebo, case):
-    """
-    right now only works with one .mat file at a time!
-
-    :param dir_sciebo:
-    :param case:
-    :return:
-    """
-
-    if case == 'case1':
-
-        w_tot = compute_w_tot(dir_sciebo, case="case1")
-        k_co2 = 0.468   #kg co2 per kWh Strom https://www.umweltbundesamt.de/presse/pressemitteilungen/bilanz-2019-co2-emissionen-pro-kilowattstunde-strom
-        gwi = w_tot * k_co2
-
-        print("--- Case1: --- \n"
-              "GWI: {:.2f} kg CO2"
-              .format(gwi))
-
-    elif case == 'basecase':
-
-        # get lists of variable names
-        dir_basecase = dir_sciebo + "/saved_models/basecase"
-        basecase_vars_lst = read_trajectory_names_folder(res_dir=dir_basecase, only_from_first_sim=True)
-        q_flow_central_heater = make_sublist(basecase_vars_lst, end='Supply.heater.Q_flow')
-
-        # get the mat file
-        mat_file = find("*.mat", dir_basecase)[0]  # find function yields a list
-
-        # central heater
-        q_flow_central_heater_df = matfile_to_df(mat_file, var_lst=q_flow_central_heater, output_interval="seconds")
-        timedelta = q_flow_central_heater_df.index[1] - q_flow_central_heater_df.index[0]
-        timedelta_sec = timedelta.seconds  # timestep width of the data
-        q_tot_central_heater = [p * timedelta_sec for p in q_flow_central_heater_df.sum()]  # in Ws
-        q_tot_central_heater = [q_flow / (3600 * 1000) for q_flow in q_tot_central_heater]  # in kWh
-        q_tot_central_heater = sum(q_tot_central_heater)
-
-        eta_heater = 0.9            # guess
-        kWh_per_kg_coal = 4.17      # https://www.agrarplus.at/heizwerte-aequivalente.html
-        kg_co2_per_kg_coal = 3.25   # https://www.bund-nrw.de/themen/braunkohle/hintergruende-und-publikationen/braunkohle-und-umwelt/braunkohle-und-klima/
-
-        gwi_central_heater = (q_tot_central_heater*kg_co2_per_kg_coal)/(eta_heater*kWh_per_kg_coal)  # in kg
-
-        w_tot = compute_w_tot(dir_sciebo, case="basecase")
-        k_co2 = 0.468  # kg co2 per kWh Strom https://www.umweltbundesamt.de/presse/pressemitteilungen/bilanz-2019-co2-emissionen-pro-kilowattstunde-strom
-        gwi_elec = w_tot * k_co2
-
-        gwi = gwi_central_heater + gwi_elec
-
-        print("--- Basecase: --- \n"
-              "GWI: {:.2f} kg CO2"
-              .format(gwi))
-
-    else:
-        gwi = 0
-        raise Exception("wrong case")
-
-    return gwi    # kWh
-
-
-def compute_op(dir_sciebo, case):
-    """
-    right now only works with one .mat file at a time!
-
-    :param dir_sciebo:
-    :param case:
-    :return:
-    """
-
-    if case == 'case1':
-
-        w_tot = compute_w_tot(dir_sciebo, case="case1")
-        price_w_tot = 0.25    # € per kWh Strom
-        op_w_tot = w_tot * price_w_tot
-
-        gwi = compute_gwi(dir_sciebo, case="case1")
-        price_gwi = 0.03    # 30€ per Ton -> 0,3€ per kg CO2
-        op_gwi = gwi * price_gwi
-
-        op = op_gwi + op_w_tot
-
-
-        print("--- Case1: --- \n"
-              "OP: {:.2f} €"
-              .format(gwi))
-
-    elif case == 'basecase':
-
-        # get lists of variable names
-        dir_basecase = dir_sciebo + "/saved_models/basecase"
-        basecase_vars_lst = read_trajectory_names_folder(res_dir=dir_basecase, only_from_first_sim=True)
-        q_flow_central_heater = make_sublist(basecase_vars_lst, end='Supply.heater.Q_flow')
-
-        # get the mat file
-        mat_file = find("*.mat", dir_basecase)[0]  # find function yields a list
-
-        # central heater
-        q_flow_central_heater_df = matfile_to_df(mat_file, var_lst=q_flow_central_heater, output_interval="seconds")
-        timedelta = q_flow_central_heater_df.index[1] - q_flow_central_heater_df.index[0]
-        timedelta_sec = timedelta.seconds  # timestep width of the data
-        q_tot_central_heater = [p * timedelta_sec for p in q_flow_central_heater_df.sum()]  # in Ws
-        q_tot_central_heater = [q_flow / (3600 * 1000) for q_flow in q_tot_central_heater]  # in kWh
-        q_tot_central_heater = sum(q_tot_central_heater)
-
-        eta_heater = 0.9            # guess
-        kWh_per_kg_coal = 4.17      # https://www.agrarplus.at/heizwerte-aequivalente.html
-        kg_co2_per_kg_coal = 3.25   # https://www.bund-nrw.de/themen/braunkohle/hintergruende-und-publikationen/braunkohle-und-umwelt/braunkohle-und-klima/
-
-        m_coal_central_heater = q_tot_central_heater/(eta_heater*kWh_per_kg_coal)  # in kg Brennstoff
-        price_coal = 0.05   # € per kg coal https://markets.businessinsider.com/commodities/coal-price?op=1
-
-        op_central_heater = m_coal_central_heater * price_coal
-
-        w_tot = compute_w_tot(dir_sciebo, case="basecase")
-        price_w_tot = 0.25  # € per kWh Strom
-        op_w_tot = w_tot * price_w_tot
-
-        gwi = compute_gwi(dir_sciebo, case="basecase")
-        price_gwi = 0.03  # 30€ per Ton -> 0,3€ per kg CO2
-        op_gwi = gwi * price_gwi
-
-        op = op_central_heater + op_w_tot + op_gwi
-
-        print("--- Basecase: --- \n"
-              "OP: {:.2f} €"
-              .format(gwi))
-
-    else:
-        op = 0
-        raise Exception("wrong case")
-
-    return op    # kWh
-
-
-def compute_total_elec2(dir_models, dir_sciebo, case, simple=True):
-
-    if case == 'case1':
-        dir_basecase = dir_sciebo + "/saved_models/case1"
-        case1_vars_lst = read_trajectory_names_folder(res_dir=dir_basecase, only_from_first_sim=True)
-
-        power_central_pump = make_sublist(case1_vars_lst, 'Supply.fan.P')
-        power_substation = make_sublist(case1_vars_lst, end='heaPum.P_el.y')
-
-        # make one list
-        power_all = power_central_pump + power_substation
-
-        # for each sim, get a dataframe of the variables
-        power_dict = mat_files_filtered_to_dict(res_dir=dir_models, var_lst=power_all)
-
-        for sim_name in power_dict.keys():  # one sim per plot
-            print(sim_name)
-            result_time_series_df = power_dict[sim_name][power_all]
-            # result_time_series_df.sum()
-            timedelta = result_time_series_df.index[1] - result_time_series_df.index[0]
-            timedelta_sec = timedelta.seconds   # timestep width of the data
-
-            if not simple:
-
-                result_df = pd.DataFrame(columns=[power_all], index=["sum_in_Ws", 'sum_in_kWh'])
-                for var in power_all:
-                    result_df.loc[['sum_in_Ws'], [var]] = result_time_series_df[var].sum() * timedelta_sec
-                    result_df.loc[['sum_in_kWh'], [var]] = result_time_series_df[var].sum() * timedelta_sec/(3600*1000)
-
-            else:
-                total_elec_lst = [total_power * timedelta_sec for total_power in result_time_series_df.sum()]   # in J
-                total_elec_in_kWh_lst = [total_elec / (3600*1000) for total_elec in total_elec_lst]
-                print("Case1: Total Electricity Demand of the Substation and the central Pump is: {} kWh"
-                      .format((sum(total_elec_in_kWh_lst))))
-
-                # print("Case1:\n"
-                #       "W_tot HPs: {} kWh \n"
-                #       "W_tot Central Pump: {} kWh"
-                #       .format(total_elec_cc, total_elec_in_kWh))
-
-    elif case == 'basecase':
-
-        # ----- individual chillers -----
-        x, cold_demand = import_demands_from_demgen(dir_sciebo, house_type='Old', output_interval=1)    # Wh
-        total_cold_dem = sum(cold_demand)/1000  # kWh
-        cop_cc = 5
-        total_elec_cc = total_cold_dem/cop_cc
-
-        # ----- central pump -----
-        dir_basecase = dir_sciebo + "/saved_models/basecase"
-        basecase_vars_lst = read_trajectory_names_folder(res_dir=dir_basecase, only_from_first_sim=True)
-        power_central_pump = make_sublist(basecase_vars_lst, 'Supply.fan.P')
-        power_dict = mat_files_filtered_to_dict(res_dir=dir_basecase, var_lst=power_central_pump)
-
-        for sim_name in power_dict.keys():  # one sim per plot
-            print(sim_name)
-            result_time_series_df = power_dict[sim_name][power_central_pump]
-            timedelta = result_time_series_df.index[1] - result_time_series_df.index[0]
+            vars_df = power_dict[sim_name]
+            timedelta = vars_df.index[1] - vars_df.index[0]
             timedelta_sec = timedelta.seconds  # timestep width of the data
+            w_vars = [p_step * timedelta_sec for p_step in vars_df.sum()]  # in Ws
+            w_vars_kWh = [w_var / (3600 * 1000) for w_var in w_vars]  # in kWh
+            w_tot_kWh = sum(w_vars_kWh)
 
-            # sum of all time steps
-            total_elec_lst = [total_power * timedelta_sec for total_power in
-                              result_time_series_df.sum()]  # in Ws=Joule
-            total_elec_in_kWh_lst = [total_elec / (3600 * 1000) for total_elec in total_elec_lst]
+            # write the KPI to the study_df
+            study_df.loc[[sim_name], ['W_tot_kWh']] = w_tot_kWh
+            study_df.to_csv(dir_case / "study.csv")
 
-            # sum of all variables
-            total_elec_in_kWh = sum(total_elec_in_kWh_lst)
+    elif case == 'CaseBase':
 
-            tooootal = total_elec_in_kWh + total_elec_cc
+        check_case(dir_case=dir_case, case=case)
 
-            print("BaseCase:\n"
-                  "W_tot Chillers: {} kWh \n"
-                  "W_tot Central Pump: {} kWh"
-                  .format(total_elec_cc, total_elec_in_kWh))
+        # read all variables, get desired variable names and their corresponding dataframes
+        case1_vars_lst = read_trajectory_names_folder(res_dir=dir_case, only_from_first_sim=True)
+        power_central_pump = make_sublist(case1_vars_lst, 'Supply.fan.P')
+        power_central_pump_dict = mat_files_filtered_to_dict(res_dir=dir_case, var_lst=power_central_pump)
+
+        # for each sim, compute the KPI and write it to study_df
+        for sim_name in power_central_pump_dict.keys():
+
+            vars_df = power_central_pump_dict[sim_name]
+            timedelta = vars_df.index[1] - vars_df.index[0]
+            timedelta_sec = timedelta.seconds  # timestep width of the data
+            w_vars = [p_step * timedelta_sec for p_step in vars_df.sum()]  # in Ws
+            w_vars_kWh = [w_var / (3600 * 1000) for w_var in w_vars]  # in kWh
+            w_central_pump_kWh = sum(w_vars_kWh)
+
+            # ----- individual chillers, not part of the simulation -----
+            x, cold_demand = import_demands_from_demgen(dir_sciebo, house_type='Old', output_interval=3600)  # Wh
+            total_cold_dem = sum(cold_demand) / 1000  # kWh
+            cop_cc = 5
+            w_tot_cc_kWh = total_cold_dem / cop_cc
+
+            w_tot_kWh = w_central_pump_kWh + w_tot_cc_kWh
+
+            # write the KPI to the study_df and save it as an updated version of the study.csv
+            study_df.loc[[sim_name], ['W_tot_kWh']] = w_tot_kWh
+            study_df.to_csv(dir_case/"study.csv")
 
     else:
         raise Exception("wrong case")
 
-
-    print("stop")
-    # --- BaseCase
-    # central pump
-    # cold demand * efficiency indiviual chillers
+    return study_df["W_tot_kWh"]    # kWh
 
 
-    # ---- addd everything together
+def compute_q_tot_df(dir_case, case):
+    """
+    right now olny works with one .mat file at a time!
 
-    # return
+    :param dir_case:
+    :param case:
+    :return:
+    """
+
+    dir_case = Path(dir_case)  # Pathlib Object
+    study_csv = dir_case / "study.csv"
+    study_df = pd.read_csv(study_csv, index_col=0)
+
+    # make new column for the KPI
+    kpi_name = 'Q_tot_kWh'
+    study_df[kpi_name] = 0
+
+    if case == 'Case1':
+
+        check_case(dir_case=dir_case, case=case)
+
+        q_tot_kWh = 0   # Case 1 is fully electric
+
+        study_df[kpi_name] = q_tot_kWh
+        study_df.to_csv(dir_case/"study.csv")
+
+    elif case == 'CaseBase':
+
+        check_case(dir_case=dir_case, case=case)
+
+        # read all variables, get desired variable names, get the dataframes
+        basecase_vars_lst = read_trajectory_names_folder(res_dir=dir_case, only_from_first_sim=True)
+        q_flow_central_heater = make_sublist(basecase_vars_lst, end='Supply.heater.Q_flow')
+        q_flow_central_heater_dict = mat_files_filtered_to_dict(res_dir=dir_case, var_lst=q_flow_central_heater)
+
+        # for each sim, compute the KPI and write it to study_df
+        for sim_name in q_flow_central_heater_dict.keys():
+            vars_df = q_flow_central_heater_dict[sim_name]
+            timedelta = vars_df.index[1] - vars_df.index[0]
+            timedelta_sec = timedelta.seconds  # timestep width of the data
+            q_vars = [q_flow_step * timedelta_sec for q_flow_step in vars_df.sum()]  # in Ws
+            q_vars_kWh = [q_var / (3600 * 1000) for q_var in q_vars]  # in kWh
+            q_central_heater_kWh = sum(q_vars_kWh)
+
+            q_tot_kWh = q_central_heater_kWh
+
+            study_df.loc[[sim_name], [kpi_name]] = q_tot_kWh
+            study_df.to_csv(dir_case/"study.csv")
+
+    else:
+        raise Exception("wrong case")
+
+    return study_df[kpi_name]    # kWh
 
 
+def compute_gwi_df(dir_case, case):
+    """
+    right now only works with one .mat file at a time!
+
+    :param dir_case:
+    :param case:
+    :return:
+    """
+
+    dir_case = Path(dir_case)  # Pathlib Object
+    study_csv = dir_case / "study.csv"
+    study_df = pd.read_csv(study_csv, index_col=0)
+
+    # make new column for the KPI
+    kpi_name = 'GWI'
+    study_df[kpi_name] = 0
+
+    if case == 'Case1':
+
+        check_case(dir_case=dir_case, case=case)
+
+        # for each sim, compute the KPI and write it to study df reduced -> better normal study.csv?
+        for sim_name in study_df.index:
+
+            # get the total Electricity from the study.csv
+            w_tot_kWh = study_df.at[sim_name, "W_tot_kWh"]
+
+            k_co2 = 0.468  # kg co2 per kWh Strom https://www.umweltbundesamt.de/presse/pressemitteilungen/bilanz-2019-co2-emissionen-pro-kilowattstunde-strom
+            gwi = w_tot_kWh * k_co2
+
+            study_df.loc[[sim_name], [kpi_name]] = gwi
+            study_df.to_csv(dir_case/"study.csv")
+
+    elif case == 'CaseBase':
+
+        check_case(dir_case=dir_case, case=case)
+
+        # for each sim, compute the KPI and write it to study_df
+        for sim_name in study_df.index:
+
+            # Todo: implement 3 different cases for heat_source: 1) Gas, 2) BHKW, 3) Weißweiler
+            q_central_heater_kWh = study_df.at[sim_name, "Q_tot_kWh"]
+            eta_heater = 0.9  # guess
+            kWh_per_kg_coal = 4.17  # https://www.agrarplus.at/heizwerte-aequivalente.html
+            kg_co2_per_kg_coal = 3.25  # https://www.bund-nrw.de/themen/braunkohle/hintergruende-und-publikationen/braunkohle-und-umwelt/braunkohle-und-klima/
+            gwi_central_heater = (q_central_heater_kWh * kg_co2_per_kg_coal) / (eta_heater * kWh_per_kg_coal)  # in kg
+
+            w_tot_kWh = study_df.at[sim_name, "W_tot_kWh"]
+            k_co2 = 0.468  # kg co2 per kWh Strom https://www.umweltbundesamt.de/presse/pressemitteilungen/bilanz-2019-co2-emissionen-pro-kilowattstunde-strom
+            gwi_elec = w_tot_kWh * k_co2
+
+            gwi = gwi_central_heater + gwi_elec
+
+            study_df.loc[[sim_name], [kpi_name]] = gwi
+            study_df.to_csv(dir_case/"study.csv")
+
+    else:
+        raise Exception("wrong case")
+
+    return study_df["GWI"]    # kWh
 
 
+def compute_op_df(dir_case, case):
+    """
+    right now only works with one .mat file at a time!
 
-    return "KPI"
+    :param dir_case:
+    :param case:
+    :return:
+    """
 
+    dir_case = Path(dir_case)  # Pathlib Object
+    study_csv = dir_case / "study.csv"
+    study_df = pd.read_csv(study_csv, index_col=0)
+
+    # make new column for the KPI
+    kpi_name = 'OP'
+    study_df[kpi_name] = 0
+
+    if case == 'Case1':
+
+        check_case(dir_case=dir_case, case=case)
+
+        # for each sim, compute the KPI and write it to study.csv
+        for sim_name in study_df.index:
+
+            # get the total Electricity from the study.csv
+            w_tot_kWh = study_df.at[sim_name, "W_tot_kWh"]
+            price_w_tot = 0.25  # € per kWh Strom
+            op_w_tot = w_tot_kWh * price_w_tot
+
+            # get the total Electricity from the study.csv
+            gwi = study_df.at[sim_name, "GWI"]
+            price_gwi = 0.03    # 30€ per Ton -> 0,3€ per kg CO2
+            op_gwi = gwi * price_gwi
+
+            op = op_gwi + op_w_tot
+
+            # write the KPI to the study_df
+            study_df.loc[[sim_name], [kpi_name]] = op
+            study_df.to_csv(dir_case/"study.csv")
+
+    elif case == 'CaseBase':
+
+        check_case(dir_case=dir_case, case=case)
+
+        # for each sim, compute the KPI and write it to study.csv
+        for sim_name in study_df.index:
+
+            # Todo: implement 3 different cases for heat_source: 1) Gas, 2) BHKW, 3) Weißweiler
+            # get total Heat from the study.csv
+            q_central_heater_kWh = study_df.at[sim_name, "Q_tot_kWh"]
+            eta_heater = 0.9  # guess
+            kWh_per_kg_coal = 4.17  # https://www.agrarplus.at/heizwerte-aequivalente.html
+            m_coal_central_heater = q_central_heater_kWh / (eta_heater * kWh_per_kg_coal)  # in kg Brennstoff
+            price_coal = 0.05  # € per kg coal https://markets.businessinsider.com/commodities/coal-price?op=1
+            op_q_central_heater = m_coal_central_heater * price_coal
+
+            # get the total Electricity from the study.csv
+            w_tot_kWh = study_df.at[sim_name, "W_tot_kWh"]
+            price_w_tot = 0.25  # € per kWh Strom
+            op_w_tot = w_tot_kWh * price_w_tot
+
+            # get the GWI from the study.csv
+            gwi = study_df.at[sim_name, "GWI"]
+            price_gwi = 0.03  # 30€ per Ton -> 0,3€ per kg CO2
+            op_gwi = gwi * price_gwi
+
+            # Total Operational Costs
+            op = op_q_central_heater + op_gwi + op_w_tot
+
+            # write the KPI to the study_df
+            study_df.loc[[sim_name], [kpi_name]] = op
+            study_df.to_csv(dir_case/"study.csv")
+
+    else:
+        raise Exception("wrong case")
+
+    return study_df["OP"]    # kWh
+
+
+def compute_all_KPIs(dir_sciebo, dir_case, case):
+    """
+    computes all the KPIs of one Case, then reduces the updated study.csv and returns it.
+    :param dir_sciebo:              sciebo-folder, only for calling the DemGen Cold Method
+    :param dir_case:                directory where the models are stored
+    :param case:                    type of models, can be "CaseBase" or "Case1"
+    :return: changing_vars_case,
+             study_df_reduced_case
+    """
+    compute_w_tot_df(dir_sciebo=dir_sciebo, dir_case=dir_case, case=case)
+    compute_q_tot_df(dir_case=dir_case, case=case)
+    compute_gwi_df(dir_case=dir_case, case=case)
+    compute_op_df(dir_case=dir_case, case=case)
+    changing_vars_case, study_df_reduced_case = reduce_and_update_study_df(dir_case)
+
+    return changing_vars_case, study_df_reduced_case
+
+
+def check_case(dir_case, case):
+    """
+    check if the Prefix of the Folders in the directory 'dir_case' corresponds
+    to the String given in 'case'. F.e. when a BaseCase Model should be analyzed as a Case1 Model.
+    :param dir_case:    PathLib Directory:  Directory where Models are stored
+    :param case:        String:             String that should be included in model name
+    :return:
+    """
+    wrong_sims = [f.name for f in dir_case.iterdir() if case not in f.name and f.is_dir()]
+    if len(wrong_sims) > 0:
+        raise Exception("A Model not from the case '{}' was found in {}".format(case, dir_case))
 
 
 # unused function
