@@ -14,6 +14,7 @@ from sklearn.model_selection import ParameterGrid
 import sys
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import pathlib
 from pathlib import Path
 import fnmatch
 import shutil
@@ -472,6 +473,11 @@ def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interva
             cold_demand:    List:   cooling demand time series
     """
 
+    # if pathlib, make to normal string
+    # ToDo: make function native for pathlib
+    if type(dir_sciebo) == pathlib.PosixPath:
+        dir_sciebo = str(dir_sciebo)
+
     # Todo: API for DemGen would be very nice
     if house_type == 'Standard':
         heat_profile_file = '/demand_profiles/DemGen/Heat_demand_Berlin_200qm_SingleFamilyHouse_SIA_standard_Values.txt'
@@ -846,6 +852,7 @@ def generate_model(params_dict, dir_sciebo, s_step=600, save_params_to_csv=True)
     new_model.write_modelica_package(save_at=dir_models)
     # ---------------------------- end create_model function ---------------------------------
 
+    # Todo: save sum of time-series, instead of first entry
     if save_params_to_csv:
         path_to_csv = dir_model + "/" + save_name + "_overview.csv"
         # if time series are inside the params_dict, only the first entry is passed to the overview.csv
