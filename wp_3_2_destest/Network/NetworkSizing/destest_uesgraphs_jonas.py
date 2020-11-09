@@ -26,8 +26,7 @@ import pycity_base.classes.prices as price
 import pycity_base.classes.environment as env
 import pycity_base.classes.demand.occupancy as occ
 
-
-# import csv
+import wp_3_2_destest.Network.NetworkSizing.Pipedimensioning as PipeDim
 
 
 def main():
@@ -40,26 +39,24 @@ def main():
         raise Exception("Unknown operating system")
 
     # ------------------------------------ demand profiles---------------------------------------------
-    ground_temps = import_ground_temp_table(dir_sciebo, plot_series=False, start_in_summer=True)
+    ground_temps = import_ground_temp_table(dir_sciebo)
 
     # dhw_demand_pycity = generate_dhw_profile_pycity()
-    dhw_demand = import_from_dhwcalc(dir_sciebo, plot_demand=False, start_in_summer=True)
+    dhw_demand = import_from_dhwcalc(dir_sciebo)
     # heat_demand_ibpsa = import_demands_from_github()
-    heat_demand_old, cold_demand_old = import_demands_from_demgen(dir_sciebo, house_type='Old',plot_demand=False,
-                                                                  start_in_summer=False)
-    heat_demand_standard, cold_demand_standard = import_demands_from_demgen(dir_sciebo, house_type='Standard',
-                                                                            plot_demand=False, start_in_summer=False)
+    heat_demand_old, cold_demand_old = import_demands_from_demgen(dir_sciebo, house_type='Old')
+    heat_demand_standard, cold_demand_standard = import_demands_from_demgen(dir_sciebo, house_type='Standard')
 
     heat_and_dhw_demand_basecase = [sum(i) for i in zip(heat_demand_old, dhw_demand)]
 
-    storage_load = convert_dhw_load_to_storage_load(dhw_demand, plot_demand=True)
-
+    storage_load = convert_dhw_load_to_storage_load(dhw_demand)
 
     # ------------------------ Parameter Dictionaries to pass into parameter study function -------------------------
     aixlib_dhc = "AixLib.Fluid.DistrictHeatingCooling."
 
     params_dict_base_case = {
         # ----------------------------------------- General/Graph Data -------------------------------------------------
+        'save_name': "CaseBase",
         'graph__network_type': 'heating',
         'graph__t_nominal': [273.15 + 80],
         'graph__p_nominal': [3e5],
@@ -70,31 +67,20 @@ def main():
         'model_pipe': 'AixLib.Fluid.FixedResistances.PlugFlowPipe',
         'edge__fac': 1.0,
         'edge__roughness': 2.5e-5,
-        'edge__kIns': [0.035],
-        # 'edge__kIns': [0.002, 0.035],
-        'edge__dIns': [0.045],
-        # 'edge__dIns': [0.0025, 0.045],
-        'pipe_scaling_factor': [1],
+        'edge__kIns': [0.035],  # U-Value, konstant im Destest
+        'size_dp_set': [250, 300, 350],
+        'size_dT_Network': [20],  # dT with wich the old network was sized
         # ------------------------------------ Demand/House Node Data ---------------------------------
-        'model_demand': aixlib_dhc + "Demands.ClosedLoop.ValveControlled_BaseCase",
-        # 'model_demand': aixlib_dhc + "Demands.ClosedLoop.ValveControlledHeatPumpDirectCoolingDHWnoStoragePIcontrol",
+        'model_demand': aixlib_dhc + "Demands.ClosedLoop.ValveControlledHXPIcontrol",
         'demand__Q_flow_input': heat_and_dhw_demand_basecase,
         'demand__max_demand_heating': max(heat_and_dhw_demand_basecase),  # for size_hydraulic_network
         'input_heat_str': 'Q_flow_input',
-        # 'demand__cold_input': cold_demand,
-        # 'demand__dhw_input': storage_load,
-        # 'demand__T_dhw_supply': [273.15 + 60],  # T_VL DHW
         'demand__dT_Network': [20],
         'demand__Q_flow_nominal': max(heat_and_dhw_demand_basecase),
-        # 'demand__val_pos_min': [0.2],
-        # 'demand__m_flow_min': [0.08],
-        # 'demand__heatDemand_max': max_heat_demand,
-        # 'demand__coldDemand_max': max_cold_demand,
-
         # ------------------------------ Supply Node Data --------------------------
         'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPump',
         'supply__TIn': [273.15 + 90],  # -> t_supply
-        'supply__dpIn': [5e5],  # p_supply
+        'supply__dpIn': [4e5],  # p_supply -> overwritten from pressure_control_p_max?
         # ------------------------------------ Pressure Control ------------------------------------------
         "pressure_control_supply": "Destest_Supply",  # Name of the supply that controls the pressure
         "pressure_control_dp": [0.5e5],  # Pressure difference to be held at reference building
@@ -106,6 +92,7 @@ def main():
 
     params_dict_case1b = {
         # ----------------------------------------- General/Graph Data -------------------------------------------------
+        'save_name': "Case1b",
         'graph__network_type': 'heating',
         'graph__t_nominal': [273.15 + 11.14],  # Start value for every pipe? Water Properties?
         'graph__p_nominal': [1e5],
@@ -116,12 +103,10 @@ def main():
         'model_pipe': 'AixLib.Fluid.FixedResistances.PlugFlowPipe',
         'edge__fac': 1.0,
         'edge__roughness': 2.5e-5,
-        'edge__kIns': [0.035],
-        'edge__dIns': [0.045],
-        'pipe_scaling_factor': [1],
-        'size_dp_set': 200.0,
+        'edge__kIns': [0.035],  # U-Value, konstant im Destest
+        'size_dp_set': [150, 200, 250, 300, 350],
+        'size_dT_Network': [20],  # dT with wich the old network was sized, for
         # ------------------------------------ Demand/House Node Data ---------------------------------
-        # 'model_demand': aixlib_dhc + "Demands.ClosedLoop.ValveControlledHeatPumpDirectCoolingDHWnoStorageV2",
         'model_demand': aixlib_dhc + "Demands.ClosedLoop.ValveControlledHeatPumpDirectCoolingDHWnoStoragePIcontrol",
         'demand__heat_input': heat_demand_old,
         'demand__max_demand_heating': max(heat_demand_old),  # for size_hydraulic_network
@@ -129,35 +114,76 @@ def main():
         'demand__cold_input': cold_demand_standard,
         'demand__dhw_input': storage_load,
         'demand__T_dhw_supply': [273.15 + 60],  # T_VL DHW
-        'demand__dT_Network': [5],
-        # 'demand__val_pos_min': [0.2],
-        'demand__m_flow_min': [0.08],
+        'demand__dT_Network': [4, 6],
         'demand__heatDemand_max': max(heat_demand_old),
         'demand__coldDemand_max': max(cold_demand_standard),
-
         # ------------------------------ Supply Node Data --------------------------
         # 'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPumpHPandCC',
         'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPumpRevHP',
         'supply__TIn': [273.15 + 20],  # -> t_supply
-        'supply__dpIn': [5e5],  # p_supply
-        "supply__TIn_HP_Source": 273.15 + 20,
+        'supply__dpIn': [4e5],  # p_supply
+        "supply__TIn_HP_Source": ground_temps,
         "supply__NetworkcoldDemand_max": 16 * max(cold_demand_standard),
         "supply__NetworkheatDemand_max": 16 * max(heat_demand_old),
         # ------------------------------------ Pressure Control ------------------------------------------
         "pressure_control_supply": "Destest_Supply",  # Name of the supply that controls the pressure
         "pressure_control_dp": [0.5e5],  # Pressure difference to be held at reference building
         "pressure_control_building": "max_distance",  # reference building for the network
-        "pressure_control_p_max": [4e5],  # Maximum pressure allowed for the pressure controller
+        "pressure_control_p_max": [5e5, 4e5, 3e5],  # Maximum pressure allowed for the pressure controller
+        "pressure_control_k": 12,  # gain of controller
+        "pressure_control_ti": 5,  # time constant for integrator block
+    }
+
+    params_dict_case1c = {
+        # ----------------------------------------- General/Graph Data -------------------------------------------------
+        'save_name': "Case1C",
+        'graph__network_type': 'heating',
+        'graph__t_nominal': [273.15 + 11.14],  # Start value for every pipe? Water Properties?
+        'graph__p_nominal': [1e5],
+        'model_ground': "t_ground_table",
+        'graph__t_ground': ground_temps,
+        'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
+        # ----------------- Pipe/Edge Data ----------------
+        'model_pipe': 'AixLib.Fluid.FixedResistances.PlugFlowPipe',
+        'edge__fac': 1.0,
+        'edge__roughness': 2.5e-5,
+        'edge__kIns': [0.035],  # U-Value, konstant im Destest
+        'size_dp_set': [150, 250, 350],
+        'size_dT_Network': [20],  # dT with wich the old network was sized, for
+        # ------------------------------------ Demand/House Node Data ---------------------------------
+        'model_demand': aixlib_dhc + "Demands.ClosedLoop.ValveControlledHeatPumpDirectCoolingDHWnoStoragePIcontrol",
+        'demand__heat_input': heat_demand_standard,
+        'demand__max_demand_heating': max(heat_demand_standard),  # for size_hydraulic_network
+        'input_heat_str': 'heat_input',
+        'demand__cold_input': cold_demand_standard,
+        'demand__dhw_input': storage_load,
+        'demand__T_dhw_supply': [273.15 + 60],  # T_VL DHW
+        'demand__dT_Network': [4, 6],
+        'demand__heatDemand_max': max(heat_demand_standard),
+        'demand__coldDemand_max': max(cold_demand_standard),
+        # ------------------------------ Supply Node Data --------------------------
+        # 'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPumpHPandCC',
+        'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPumpRevHP',
+        'supply__TIn': [273.15 + 20],  # -> t_supply
+        'supply__dpIn': [4e5],  # p_supply
+        "supply__TIn_HP_Source": ground_temps,
+        "supply__NetworkcoldDemand_max": 16 * max(cold_demand_standard),
+        "supply__NetworkheatDemand_max": 16 * max(heat_demand_old),
+        # ------------------------------------ Pressure Control ------------------------------------------
+        "pressure_control_supply": "Destest_Supply",  # Name of the supply that controls the pressure
+        "pressure_control_dp": [0.5e5],  # Pressure difference to be held at reference building
+        "pressure_control_building": "max_distance",  # reference building for the network
+        "pressure_control_p_max": [4e5, 2e5],  # Maximum pressure allowed for the pressure controller
         "pressure_control_k": 12,  # gain of controller
         "pressure_control_ti": 5,  # time constant for integrator block
     }
 
     # ---------------------------------------- create Simulations ----------------------------------------------
-    parameter_study(params_dict_case1b, dir_sciebo)
+    parameter_study(params_dict_case1c, dir_sciebo)
 
 
-def convert_dhw_load_to_storage_load(dhw_demand, s_step=600, V_stor=200, dT_stor=30, dT_threshhold=10,
-                                     Qcon_flow_max=5000, plot_cum_demand=True, plot_demand=True):
+def convert_dhw_load_to_storage_load(dhw_demand, s_step=600, V_stor=300, dT_stor=55, dT_threshhold=10,
+                                     Qcon_flow_max=5000, plot_cum_demand=False, plot_demand=False):
     """
     Converts the input DHW-Profile without a DHW-Storage to a DHW-Profile with a DHW-Storage.
     The output profile looks as if the HP would not supply the DHW-load directly but would rather re-heat
@@ -733,23 +759,12 @@ def generate_model(params_dict, dir_sciebo, s_step=600, save_params_to_csv=True)
 
     # Add Diameter[m], Length[m], Insulation Thickness[m] and U-Value [W/mK] to edges/pipes
     for index, row in pipe_data.iterrows():
-    #     simple_district.edges[
-    #         simple_district.nodes_by_name[row['Beginning Node']],
-    #         simple_district.nodes_by_name[row['Ending Node']]]['diameter'] \
-    #         = row['Inner Diameter [m]'] * params_dict["pipe_scaling_factor"]
-    #     simple_district.edges[
-    #         simple_district.nodes_by_name[row['Beginning Node']],
-    #         simple_district.nodes_by_name[row['Ending Node']]]['dh'] \
-    #         = row['Inner Diameter [m]'] * params_dict["pipe_scaling_factor"]
         simple_district.edges[
             simple_district.nodes_by_name[row['Beginning Node']],
             simple_district.nodes_by_name[row['Ending Node']]]['length'] = row['Length [m]']
     #     simple_district.edges[
     #         simple_district.nodes_by_name[row['Beginning Node']],
     #         simple_district.nodes_by_name[row['Ending Node']]]['dIns'] = row['Insulation Thickness [m]']
-    #     simple_district.edges[
-    #         simple_district.nodes_by_name[row['Beginning Node']],
-    #         simple_district.nodes_by_name[row['Ending Node']]]['kIns'] = row['U-value [W/mK]']
 
     for edge in simple_district.edges():
         simple_district.edges[edge[0], edge[1]]['name'] = str(edge[0]) + 'to' + str(edge[1])
@@ -763,16 +778,20 @@ def generate_model(params_dict, dir_sciebo, s_step=600, save_params_to_csv=True)
     simple_district = utils.size_hydronic_network(
         graph=simple_district,
         network_type="heating",
-        delta_t_heating=params_dict['demand__dT_Network'],
+        delta_t_heating=params_dict['size_dT_Network'],
         dp_set=params_dict['size_dp_set'],   # tabellen von Ziyuan betrachten
         loop=False)
 
+    # Dymola can only handle "dh", not "diameter"
     for edge in simple_district.edges():
         simple_district.edges[edge[0], edge[1]]['dh'] = simple_district.edges[edge[0], edge[1]]['diameter']
 
+    # write insulation thickness to the graph edges
+    for i in list(simple_district.edges):
+        simple_district.edges[i]['dIns'] = PipeDim.giveInsulation(simple_district.edges[i]['dh'])
 
     # write m_flow_nominal to the graphs edges with uesgraph function
-    sysmod_utils.estimate_m_flow_nominal(graph=simple_district, dT_design=10,
+    sysmod_utils.estimate_m_flow_nominal(graph=simple_district, dT_design=params_dict['demand__dT_Network'],
                                          network_type='heating', input_heat_str=params_dict['input_heat_str'])
 
     # get the maximum m_flow_nominal from the edges (set by the estimate_m_flow_nominal function)
@@ -806,7 +825,7 @@ def generate_model(params_dict, dir_sciebo, s_step=600, save_params_to_csv=True)
     if not os.path.exists(dir_models):
         os.mkdir(dir_models)
 
-    save_name = "Destest_Jonas_{}".format(datetime.now().strftime('%Y_%m_%d_%H_%M_%S'))  # for unique naming
+    save_name = "{}_{}".format(params_dict['save_name'], datetime.now().strftime('%Y_%m_%d_%H_%M_%S'))
     dir_model = os.path.join(dir_models, save_name)
 
     # ------------modified create_model function, default is part of sysmod_utils -------------
