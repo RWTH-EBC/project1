@@ -14,6 +14,7 @@ from sklearn.model_selection import ParameterGrid
 import sys
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import seaborn as sns
 import pathlib
 from pathlib import Path
 import fnmatch
@@ -37,19 +38,20 @@ def main():
         dir_sciebo = "D:/mma-jgr/sciebo-folder/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data"
     else:
         raise Exception("Unknown operating system")
+    dir_output = dir_sciebo + "/plots"
 
     # ------------------------------------ demand profiles---------------------------------------------
-    ground_temps = import_ground_temp_table(dir_sciebo)
+    ground_temps = import_ground_temp_table(dir_sciebo, plot_series=False, start_in_summer=True)
 
-    # dhw_demand_pycity = generate_dhw_profile_pycity()
-    dhw_demand = import_from_dhwcalc(dir_sciebo)
-    # heat_demand_ibpsa = import_demands_from_github()
+    dhw_demand = import_from_dhwcalc(dir_sciebo, plot_demand=False, start_in_summer=True)
     heat_demand_old, cold_demand_old = import_demands_from_demgen(dir_sciebo, house_type='Old')
     heat_demand_standard, cold_demand_standard = import_demands_from_demgen(dir_sciebo, house_type='Standard')
 
     heat_and_dhw_demand_basecase = [sum(i) for i in zip(heat_demand_old, dhw_demand)]
 
-    storage_load = convert_dhw_load_to_storage_load(dhw_demand)
+    storage_load = convert_dhw_load_to_storage_load(dhw_demand, dir_output, with_losses=True,
+                                                           plot_cum_demand=True,
+                                                           start_plot='2019-07-14-09', end_plot='2019-07-15-12')
 
     # ------------------------ Parameter Dictionaries to pass into parameter study function -------------------------
     aixlib_dhc = "AixLib.Fluid.DistrictHeatingCooling."
@@ -182,23 +184,29 @@ def main():
     parameter_study(params_dict_case1c, dir_sciebo)
 
 
-def convert_dhw_load_to_storage_load(dhw_demand, s_step=600, V_stor=300, dT_stor=55, dT_threshhold=10,
-                                     Qcon_flow_max=5000, plot_cum_demand=False, plot_demand=False):
+def convert_dhw_load_to_storage_load(dhw_demand, dir_output, s_step=600, V_stor=300, dT_stor=55, dT_threshhold=10,
+                                     Qcon_flow_max=5000, plot_cum_demand=False, with_losses=True,
+                                     start_plot='2019-08-08-18', end_plot='2019-08-09-09',
+                                     save_fig=True):
     """
     Converts the input DHW-Profile without a DHW-Storage to a DHW-Profile with a DHW-Storage.
     The output profile looks as if the HP would not supply the DHW-load directly but would rather re-heat
     the DHW-Storage, which has dropped below a certain dT Threshold.
-    The advantage is, that no storage model has to be part of a d ynamic simulation,
+    The advantage is, that no storage model has to be part of a dynamic simulation,
     although the heatpump still acts as if a storage is supplied. Based on DIN EN 12831-3.
 
     :param dhw_demand:      List, stores the DHW-demand profile in [W] per Timestep
+    :param dir_output:      Directory where to save the plot
     :param s_step:          Seconds within a timestep. Usual Values are 3600 (1h timesteps) or 600 (10min timesteps)
     :param V_stor:          Storage Volume in Liters
     :param dT_stor:         max dT in Storage
     :param dT_threshhold:   max dT Drop before Storage needs to be re-heated
-    :param Qcon_flow_max:   max Heat Flow Rate at the Heatpump when refilling the Storage in [W]
+    :param Qcon_flow_max:   Heat Flow Rate at the Heatpump when refilling the Storage in [W]
     :param plot_cum_demand: Plot the cumulative "Summenliniendiagram" as described in DIN DIN EN 12831-3
-    :param plot_demand:     Plot the dhw demand before and after the storage load conversion.
+    :param with_losses:     Boolean if the storage should have losses
+    :param start_plot:      Pandas Datetime where the Plot should start, e.g. '2019-08-02'
+    :param end_plot:        Pandas Datetime where the plot should end, e.g. '2019-08-03'
+    :param save_fig:        decide to save the fig as a pdf and png in dir_output
     :return: storage_load:  DHW-profile that re-heats a storage.
     """
 
@@ -206,66 +214,60 @@ def convert_dhw_load_to_storage_load(dhw_demand, s_step=600, V_stor=300, dT_stor
     dhw_demand = [dem_step * s_step for dem_step in dhw_demand]
 
     # --------- Storage Data ---------------
-    # Todo: get parameters from DIN
     # Todo: think about how Parameters should be for Schichtspeicher
-    # Todo: Implement Heat Losses
-    V_stor = V_stor   # Storage Volume in Liters
     rho = 1         # Liters to Kilograms
     m_w = V_stor * rho  # Mass Water in Storage
     c_p = 4180  # Heat Capacity Water in [J/kgK]
-    dT = dT_stor     # dT of Storage, e.f 10°C to 65°C -> 55K
-    Q_full = m_w * c_p * dT
-
-    dT_threshhold = dT_threshhold   # max Temp Drop [K] in Storage before Re-heating starts
+    Q_full = m_w * c_p * dT_stor
     dQ_threshhold = m_w * c_p * dT_threshhold
     Qcon_flow_max = Qcon_flow_max   # Heat flow rate in [W] of the HP in Storage-Heating Mode
-
-    t_dQ = dQ_threshhold/Qcon_flow_max  # time needed to increase storage Temp by dT_threshhold in seconds [s]
-    t_dQ_steps = t_dQ/s_step  # convert from seconds to timestep width
-
-    timesteps = round(t_dQ_steps-0.5)  # -> round number of timesteps to lower integer value
-
-    Q_dh_timesteps = dQ_threshhold * (timesteps/t_dQ_steps)     # energy added to Storage in t_dQ_steps
-    Q_dh_timesteps2 = Qcon_flow_max * timesteps * s_step      # just another way to compute it
     Q_dh_timestep = Qcon_flow_max * s_step    # energy added in 1 timestep
 
-    # ---------- write storage load time series --------
-    dQ_track = 0    # tracks the cumulative dhw demand until the Temp falls more than 5K.
-    storage_load = []   # new time series
-    above_dT_threshhold = True
+    # ---------- write storage load time series, with Losses --------
+    Q_storr_curr = Q_full  # tracks the Storage Filling
+    storage_load = []  # new time series
+    storage_level = []
+    loss_load = []
+    fill_storage = False
 
     for t_step, dem_step in enumerate(dhw_demand, start=0):
+        storage_level.append(Q_storr_curr)
+        if with_losses:
+            Q_loss = (Q_storr_curr * 0.001 * s_step) / 3600     # 0,1% Loss per Hour
+        else:
+            Q_loss = 0
+        loss_load.append(Q_loss)
 
         # for initial condition, when storage_load is still empty
         if len(storage_load) == 0:
-            dQ_track = dQ_track + dem_step
+            Q_storr_curr = Q_storr_curr - dem_step - Q_loss
         else:
-            dQ_track = dQ_track - storage_load[t_step - 1] + dem_step
+            Q_storr_curr = Q_storr_curr - dem_step - Q_loss + storage_load[t_step - 1]
 
-        if above_dT_threshhold:
-            if dQ_track <= Q_dh_timesteps:
-                storage_load.append(0)
-            else:
-                above_dT_threshhold = False
-                if dQ_track >= Q_dh_timestep:
-                    storage_load.append(Q_dh_timestep)
-                else:
-                    storage_load.append(0)
+        if Q_storr_curr >= Q_full:  # storage full, dont fill it!
+            fill_storage = False
+            storage_load.append(0)
             continue
-        else:
-            if dQ_track >= Q_dh_timestep:
+
+        # storage above dT Threshhold, but not full. depending if is charging or discharging, storage_load is appended
+        elif Q_storr_curr > Q_full - dQ_threshhold:
+            if fill_storage:
                 storage_load.append(Q_dh_timestep)
             else:
                 storage_load.append(0)
-                above_dT_threshhold = True
+                continue
+
+        else:  # storage below dT Threshhold, fill it!
+            fill_storage = True
+            storage_load.append(Q_dh_timestep)
 
     # print out total demands and Difference between them
     print("Total DHW Demand is {:.2f} kWh".format(sum(dhw_demand)/(3600*1000)))
     print("Total Storage Demand is {:.2f} kWh".format(sum(storage_load) / (3600 * 1000)))
-    diff = sum(dhw_demand) - sum(storage_load)
+    diff = sum(dhw_demand) + sum(loss_load) - sum(storage_load)
     print("Difference between dhw demand and storage load ist {:.2f} kWh".format(diff/(3600*1000)))
     if diff < 0:
-        raise Exception("More heat than dhw demand is added to the storage!")
+        print("More heat than dhw demand is added to the storage in loss-less mode!")
 
     # Count number of clusters of non-zero values ("peaks") -> reduces the amount of HP mode switches!
     dhw_peaks = int(np.diff(np.concatenate([[0], dhw_demand, [0]]) == 0).sum() / 2)
@@ -273,46 +275,139 @@ def convert_dhw_load_to_storage_load(dhw_demand, s_step=600, V_stor=300, dT_stor
     print("The Storage reduced the number of DHW heating periods from {} to {}, which is equal to "
           "{:.2f} and {:.2f} per day, respectively.".format(dhw_peaks, stor_peaks, dhw_peaks/365, stor_peaks/365))
 
-    # Summenlinien
+    # draw cumulative demand (german: "Summenlinien")
     dhw_demand_sumline = []
-    acc_dem = 0
+    acc_dem = 0     # accumulated demand
     for dem_step in dhw_demand:
         acc_dem += dem_step
         dhw_demand_sumline.append(acc_dem)
+
     storage_load_sumline = []
-    acc_load = 0
-    for stor_step in storage_load:
-        acc_load += stor_step
+    acc_load = 0    # accumulated load
+    for i, stor_step in enumerate(storage_load):
+        acc_load += stor_step - loss_load[i]
         storage_load_sumline.append(acc_load)
     storage_load_sumline = [Q + Q_full for Q in storage_load_sumline]
 
-    # add Difference to the Last 0 Entry of the Time Series -> Sum of demands is the same then
-    fill_last_zero_index_with_demand_diff = False
-    if fill_last_zero_index_with_demand_diff:
+    # Todo: Fill storage so that at the end of the year its full again
+    fill_storage = False
+    if fill_storage:
         last_zero_index = None
         for idx, item in enumerate(reversed(storage_load), start=0):
             if item == 0:
                 last_zero_index = idx
         storage_load[last_zero_index] += diff
 
-    # Plots
+    # Plot the cumulative demand
     if plot_cum_demand:
-        plt.plot([dem_step/(3600*1000) for dem_step in dhw_demand_sumline])
-        plt.plot([stor_step/(3600*1000) for stor_step in storage_load_sumline])
-        plt.ylabel('cumulative storage load and dhw demand in kWh')
-        plt.title('Bedarfs ({} Peaks) und Versorgungskennliene ({} Peaks)'.format(dhw_peaks, stor_peaks))
+
+        # use RWTH Colors
+        rwth_blue = "#00549F"
+        rwth_blue_50 = "#8EBAE5"
+        rwth_green = "#57AB27"
+        rwth_green_50 = "#B8D698"
+        rwth_orange = "#F6A800"
+        rwth_orange_50 = "#FDD48F"
+        rwth_red = "#CC071E"
+        rwth_red_50 = "#E69679"
+        rwth_yellow = "#FFED00"
+        rwth_yellow_50 = "#FFF59B"
+        rwth_colors_all = [rwth_blue, rwth_green, rwth_orange, rwth_red, rwth_yellow, rwth_blue_50, rwth_green_50,
+                       rwth_orange_50, rwth_red_50, rwth_yellow_50]
+        sns.set_palette(sns.color_palette(rwth_colors_all))     # does nothing? specify colors with palette=[c1, c2..]
+
+        plt.style.use("/Users/jonasgrossmann/git_repos/matplolib-style/ebc.paper.mplstyle")
+        sns.set()
+        sns.set_style("white")
+        sns.set_context("paper")
+
+        # set date range to simplify plot slicing
+        date_range = pd.date_range(start='2019-01-01', end='2020-01-01', freq=str(s_step)+'S')
+        date_range = date_range[:-1]
+
+        # convert Joule values to kWh or kW
+        dhw_demand_sumline_kWh = [dem_step / (3600 * 1000) for dem_step in dhw_demand_sumline]
+        storage_load_sumline_kWh = [stor_step / (3600 * 1000) for stor_step in storage_load_sumline]
+        dhw_demand_kW = [dem_step / (s_step * 1000) for dem_step in dhw_demand]
+        storage_load_kW = [stor_step / (s_step * 1000) for stor_step in storage_load]
+        losses_W = [loss_step / s_step for loss_step in loss_load]
+
+        # make dataframe for plotting with seaborn
+        dhw_demand_sumline_df = pd.DataFrame({'sum DHW Demand': dhw_demand_sumline_kWh,
+                                              'sum Storage Load': storage_load_sumline_kWh,
+                                              'DHW Demand': dhw_demand_kW,
+                                              'Storage Load': storage_load_kW,
+                                              'Losses': losses_W},
+                                             index=date_range)
+
+        # decide how to resample data based on plot interval
+        timedelta = pd.Timedelta(pd.Timestamp(end_plot) - pd.Timestamp(start_plot))
+        if timedelta.days < 3:
+            resample_delta = "600S"  # 10min
+        elif timedelta.days < 14:  # 2 Weeks
+            resample_delta = "1800S"  # 30min
+        elif timedelta.days < 62:  # 2 months
+            resample_delta = "H"  # hourly
+        else:
+            resample_delta = "D"
+
+        # make figures with 3 different y-axes
+        fig, ax1 = plt.subplots()
+        fig.tight_layout()
+
+        ax1_data = dhw_demand_sumline_df[['sum DHW Demand', 'sum Storage Load']][start_plot:end_plot]
+        ax1 = sns.lineplot(data=ax1_data.resample(resample_delta).mean(), dashes=[(6, 2), (6, 2)], linewidth=1.2,
+                           palette=[rwth_blue, rwth_orange])
+        ax1.grid(False)
+
+        ax2 = ax1.twinx()
+        ax2_data = dhw_demand_sumline_df[['DHW Demand', 'Storage Load']][start_plot:end_plot]
+        ax2 = sns.lineplot(data=ax2_data.resample(resample_delta).mean(), dashes=False, linewidth=0.7,
+                           palette=[rwth_blue, rwth_orange])
+
+        ax3 = ax1.twinx()
+        ax3_data = dhw_demand_sumline_df[['Losses']][start_plot:end_plot]
+        ax3 = sns.lineplot(data=ax3_data.resample(resample_delta).mean(), dashes=False, linewidth=0.5,
+                           palette=[rwth_red])
+        ymin, ymax = ax3.get_ylim()
+        ax3.set_ylim(ymin, ymax * 1.5)
+        ax3.spines["right"].set_position(("axes", 1.15))
+
+        # make one legend for the figure
+        ax1.legend_.remove()
+        ax2.legend_.remove()
+        ax3.legend_.remove()
+        fig.legend(loc="upper left", bbox_to_anchor=(0.12, 0.9), frameon=False,
+                   # prop={'size': 6}
+                   )
+
+        ax1.set_ylabel('cumulative Demand and Supply in kWh')
+        ax2.set_ylabel('current Demand and Supply in kW')
+        ax3.set_ylabel('Losses in W')
+        ax2.grid(False)
+        ax3.grid(False)
+
+        # set the x axis ticks
+        # https://matplotlib.org/3.1.1/gallery/ticks_and_spines/date_concise_formatter.html
+        locator = mdates.AutoDateLocator()
+        formatter = mdates.ConciseDateFormatter(locator)
+        formatter.formats = ['%y', '%b', '%d', '%H:%M', '%H:%M', '%S.%f', ]
+        formatter.zero_formats = [''] + formatter.formats[:-1]
+        formatter.zero_formats[3] = '%d-%b'
+        formatter.offset_formats = ['', '%Y', '%b %Y', '%d %b %Y', '%d %b %Y', '%d %b %Y %H:%M', ]
+        ax1.xaxis.set_major_locator(locator)
+        ax1.xaxis.set_major_formatter(formatter)
+
+        plt.title('Demand ({} Peaks) and Supply ({} Peaks)'.format(dhw_peaks, stor_peaks))
         plt.show()
+
+        if save_fig:
+            fig.savefig(os.path.join(dir_output + "/SummenlineinDiagramm.pdf"))
+            fig.savefig(os.path.join(dir_output + "/SummenlineinDiagramm.png"), dpi=600)
 
     # Input Unit of DHW demand should be equal to Output Unit of DHW demand
     storage_load = [stor_step / s_step for stor_step in storage_load]
     dhw_demand = [dem_step / s_step for dem_step in dhw_demand]
-
-    if plot_demand:
-        plt.plot([stor_step for stor_step in dhw_demand])
-        plt.plot([dem_step for dem_step in storage_load])
-        plt.ylabel('storage load and dhw demand in Watt')
-        plt.title('DHW ({} Peaks) und Storage ({} Peaks)'.format(dhw_peaks, stor_peaks))
-        plt.show()
 
     return storage_load
 
@@ -443,7 +538,8 @@ def import_ground_temp_table(dir_sciebo, output_interval=600, plot_series=False,
     return ground_temps_lst
 
 
-def import_from_dhwcalc(dir_sciebo, s_step=600, delta_t_dhw=35, plot_demand=False, start_in_summer=False):
+def import_from_dhwcalc(dir_sciebo, s_step=600, delta_t_dhw=35, plot_demand=False, start_in_summer=False,
+                        save_fig=True):
     """
     DHWcalc yields Volume Flow TimeSeries (in Liters per hour).
     To get Energyflows, we have to multiply by rho, cp and dt. -> Q = Vdot * rho * cp * dt
@@ -457,6 +553,7 @@ def import_from_dhwcalc(dir_sciebo, s_step=600, delta_t_dhw=35, plot_demand=Fals
     else:
         raise Exception("Unkown Time Step for DHWcalc")
     dhw_profile = dir_sciebo + dhw_file_in_sciebo
+    dir_output = dir_sciebo + "/plots"
 
     dhw_demand_LperH_perStep = [int(word.strip('\n')) for word in open(dhw_profile).readlines()]     # L/h each step
     dhw_demand_LperSec_perStep = [x/3600 for x in dhw_demand_LperH_perStep]
@@ -467,15 +564,26 @@ def import_from_dhwcalc(dir_sciebo, s_step=600, delta_t_dhw=35, plot_demand=Fals
     dhw_demand = [LperSec_per_step * rho * cp * dt for LperSec_per_step in dhw_demand_LperSec_perStep]  # in W
 
     yearly_dhw_energy_demand = sum(dhw_demand) * s_step / (3600 * 1000)     # in kWh
-    average_dhw_heat_flow = (sum(dhw_demand) / len(dhw_demand)) / 1000          # in kW
+    max_dhw_heat_flow = max(dhw_demand) / 1000          # in kW
     print("Yearly DHW energy demand from DHWcalc is {:.2f} kWh"
-          " with an average of {:.2f} kW".format(yearly_dhw_energy_demand, average_dhw_heat_flow))
+          " with an average of {:.2f} kW".format(yearly_dhw_energy_demand, max_dhw_heat_flow))
 
     if plot_demand:
-        plt.plot(dhw_demand)
+
+        plt.style.use("/Users/jonasgrossmann/git_repos/matplolib-style/ebc.paper.mplstyle")
+        sns.set()
+        sns.set_context("paper")
+
+        fig, ax = plt.subplots()
+        ax.plot(dhw_demand, linewidth=0.7, label="DHW Demand in Watt")
         plt.ylabel('DHW demand in Watt')
-        plt.title('DHW Profile, sum={:.2f} kWh. av {:.2f} kW'.format(yearly_dhw_energy_demand, average_dhw_heat_flow))
+        plt.xlabel('Minutes in a Year')
+        plt.title('Total Energy: {:.2f} kWh with a peak of {:.2f} kW'.format(yearly_dhw_energy_demand, max_dhw_heat_flow))
+
         plt.show()
+        if save_fig:
+            fig.savefig(os.path.join(dir_output + "/DHW_Demand.pdf"))
+            # fig.savefig(os.path.join(dir_output + "DemGenDemands_" + str(house_type) + ".png"), dpi=600)
 
     if start_in_summer:
         half = int((len(dhw_demand) - 1) / 2)  # half the length of the demand timeseries
@@ -485,7 +593,7 @@ def import_from_dhwcalc(dir_sciebo, s_step=600, delta_t_dhw=35, plot_demand=Fals
 
 
 def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interval=600, plot_demand=False,
-                               start_in_summer=False):
+                               start_in_summer=False, save_fig=True):
     """
     files from EON.EBC DemGen. 8760 time steps in [W]
     Calculate your own demands at http://demgen.testinstanz.os-cloud.eonerc.rwth-aachen.de/
@@ -495,6 +603,7 @@ def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interva
     :param house_type:      String: Definitions of SIA2024. Standard = Standardwert, Old = Bestand, New = Zielwert
     :param output_interval: int:    Output interval. Only gets upscaled, as all  DemGen profiles are hourly profiles.
     :param plot_demand:     Bool:   decide to plot the demand profiles
+    :param save_fig:        Bool:   decide to save the plots as a pdf
     :return heat_demand:    List:   heating demand time series
             cold_demand:    List:   cooling demand time series
     """
@@ -503,6 +612,7 @@ def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interva
     # ToDo: make function native for pathlib
     if type(dir_sciebo) == pathlib.PosixPath:
         dir_sciebo = str(dir_sciebo)
+    dir_output = dir_sciebo + "/plots"
 
     # Todo: API for DemGen would be very nice
     if house_type == 'Standard':
@@ -543,14 +653,24 @@ def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interva
           .format(house_type, yearly_cold_demand, average_cold_demand, max_cold_demand))
 
     if plot_demand:
-        plt.plot(cold_demand)
-        plt.plot(heat_demand)
-        plt.ylabel('heat and cold demand in Watt'.format(yearly_cold_demand, yearly_heat_demand))
-        plt.title('Heat and Cold Demand for DemGen, housetype={} \n'
-                  'total cold={:.0f} kWh, total heat={:.0f} kWh \n'
-                  'peak cold={:.2f} kW, peak heat={:.2f} kW'
-                  .format(house_type, yearly_cold_demand, yearly_heat_demand, max_cold_demand, max_heat_demand))
+        plt.style.use("/Users/jonasgrossmann/git_repos/matplolib-style/ebc.paper.mplstyle")
+        sns.set()
+        sns.set_context("paper")
+
+        fig, ax = plt.subplots()
+        ax.plot(cold_demand, linewidth=0.7, label="Cold Demand")
+        ax.plot(heat_demand, linewidth=0.7, label="Heat Demand")
+        plt.ylabel('Heat and Cold demand in Watt'.format(yearly_cold_demand, yearly_heat_demand))
+        plt.xlabel('Hours in a Year')
+        plt.title('Heat and Cold Demand from DemGen, Housetype: {} \n'
+                  'Total Cold Demand: {:.0f} kWh, with a peak of {:.2f} kW \n'
+                  'Total Heat Demand: {:.0f} kWh  with a peak of {:.2f} kW'
+                  .format(house_type, yearly_cold_demand, max_cold_demand, yearly_heat_demand, max_heat_demand))
+
         plt.show()
+        if save_fig:
+            fig.savefig(os.path.join(dir_output + "/DemGenDemands_" + str(house_type) + ".pdf"))
+            # fig.savefig(os.path.join(dir_output + "DemGenDemands_" + str(house_type) + ".png"), dpi=600)
 
     # stretch out the list to match a given output interval. F.e: [2,4] -> steps = 3 ->[2,2,2,4,4,4]
     steps = 3600/output_interval
@@ -567,35 +687,35 @@ def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interva
     return heat_demand, cold_demand     # in W
 
 
-def create_study_pre_csv(dir_sciebo):
+def create_study_csv(dir_sciebo):
     dir_sciebo = Path(dir_sciebo)
     dir_models = Path(dir_sciebo/'models')
-    study_pre_csv = Path(dir_models / 'study_pre.csv')
+    study_csv = Path(dir_models / 'study.csv')
     csv_files = find("*overview.csv", dir_models)
     if len(csv_files) == 0:
         raise Exception("No overview.csv files were found in the models folder")
     else:
         # if theres yet no study.csv, the first overview.csv from the models folder is copied and renamed to study.csv
-        if not study_pre_csv.is_file():
+        if not study_csv.is_file():
             shutil.copy(csv_files[0], dir_models)
             first_csv_name = Path(csv_files[0]).name
             first_study_csv = Path(dir_models / first_csv_name)
-            first_study_csv.rename(study_pre_csv)
+            first_study_csv.rename(study_csv)
             del csv_files[0]  # for not appending it again
         else:
-            raise Exception("A study_pre.csv file was already found in the models folder."
+            raise Exception("A study.csv file was already found in the models folder."
                             "Please clean your models folder before starting a new simulation study.")
 
-        study_pre_df = pd.read_csv(study_pre_csv, index_col=0)
+        study_df = pd.read_csv(study_csv, index_col=0)
 
         for csv_file in csv_files:
             overview_df = pd.read_csv(csv_file, index_col=0)
-            study_pre_df = pd.concat([study_pre_df, overview_df], axis='rows')
-            study_pre_df.drop_duplicates()
-            study_pre_df.sort_index(axis='index', ascending=False, inplace=True)
+            study_df = pd.concat([study_df, overview_df], axis='rows')
+            study_df.drop_duplicates()
+            study_df.sort_index(axis='index', ascending=False, inplace=True)
 
-        print(study_pre_df.head())
-        study_pre_df.to_csv(study_pre_csv)
+        print(study_df.head())
+        study_df.to_csv(study_csv)
 
 
 def find(pattern, path):
@@ -676,7 +796,7 @@ def parameter_study(params_dict, dir_sciebo):
         # print(final_dict.keys)
         generate_model(params_dict=final_dict, dir_sciebo=dir_sciebo)
 
-    create_study_pre_csv(dir_sciebo)
+    # create_study_pre_csv(dir_sciebo)
 
     return len(param_grid)
 
