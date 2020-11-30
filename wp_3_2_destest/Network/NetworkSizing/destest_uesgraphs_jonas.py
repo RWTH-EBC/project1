@@ -14,6 +14,9 @@ from sklearn.model_selection import ParameterGrid
 import sys
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import matplotlib as mpl
+from matplotlib import rcParams
+from matplotlib import rc
 import seaborn as sns
 import pathlib
 from pathlib import Path
@@ -28,6 +31,34 @@ import pycity_base.classes.environment as env
 import pycity_base.classes.demand.occupancy as occ
 
 import wp_3_2_destest.Network.NetworkSizing.Pipedimensioning as PipeDim
+
+font_size = 11
+line_width = 0.8
+fig_width = (155 / 25.4)  # 1inch=25.4mm
+fig_height = (fig_width / (16 / 9)) * 0.8
+figsize = (fig_width, fig_height)
+marker_size = 10
+alpha = 1
+# Change general parameters
+# https://matplotlib.org/api/font_manager_api.html
+# https://matplotlib.org/3.1.1/tutorials/text/text_intro.html
+# https://stackoverflow.com/questions/21933187/how-to-change-legend-fontname-in-matplotlib
+# https://matplotlib.org/3.1.1/tutorials/introductory/customizing.html
+# ändert nicht die schriftart bei Seaborn ....
+rcParams_dict = {"font.size": font_size,
+                 "font.family": 'sans-serif',
+                 "font.sans-serif": 'Heuristica',
+                 "lines.linewidth": line_width,
+                 "axes.linewidth": line_width,
+                 "lines.markersize": marker_size,
+                 'legend.fontsize': font_size,
+                 'xtick.labelsize': font_size,
+                 'ytick.labelsize': font_size,
+                 'axes.labelsize': font_size,
+                 'axes.titlesize': font_size}
+mpl.rcParams.update(rcParams_dict)
+mpl.rc('font', family='Heuristica')
+sns.set_context(rc=rcParams_dict)
 
 
 def main():
@@ -72,7 +103,8 @@ def main():
         "pressure_control_supply": "Destest_Supply",  # Name of the supply that controls the pressure
         "pressure_control_dp": [0.25e5, 0.5e5, 1.5e5],  # Pressure difference to be held at reference building
         "pressure_control_building": "max_distance",  # reference building for the network
-        "pressure_control_p_max": [0.5e5, 1e5, 2e5],  # Maximum pressure allowed for the pressure controller (should be max_dp it can supply?)
+        "pressure_control_p_max": [0.5e5, 1e5, 2e5],
+        # Maximum pressure allowed for the pressure controller (should be max_dp it can supply?)
         "pressure_control_k": 12,  # gain of controller
         "pressure_control_ti": 5,  # time constant for integrator block
     }
@@ -584,6 +616,60 @@ def import_from_dhwcalc(dir_sciebo, s_step=600, delta_t_dhw=35, plot_demand=Fals
             fig.savefig(os.path.join(dir_output + "/DHW_Demand.pdf"))
             # fig.savefig(os.path.join(dir_output + "DemGenDemands_" + str(house_type) + ".png"), dpi=600)
 
+    plot_for_thesis = False
+    if plot_for_thesis:
+        # RWTH colours
+        rwth_blue = "#00549F"
+        rwth_blue_50 = "#8EBAE5"
+        rwth_green = "#57AB27"
+        rwth_green_50 = "#B8D698"
+        rwth_orange = "#F6A800"
+        rwth_orange_50 = "#FDD48F"
+        rwth_red = "#CC071E"
+        rwth_red_50 = "#E69679"
+        rwth_yellow = "#FFED00"
+        rwth_yellow_50 = "#FFF59B"
+        rwth_colors_all = [rwth_blue, rwth_green, rwth_orange, rwth_red, rwth_yellow, rwth_blue_50, rwth_green_50,
+                           rwth_orange_50, rwth_red_50, rwth_yellow_50]
+        sns.set_palette(sns.color_palette(rwth_colors_all))  # does nothing? specify colors with palette=[c1, c2..]
+
+        plt.style.use("/Users/jonasgrossmann/git_repos/matplolib-style/ebc.paper.mplstyle")
+        sns.set_style("white")
+        sns.set_context("paper")
+
+        # set date range to simplify plot slicing
+        date_range = pd.date_range(start='2019-01-01', end='2020-01-01', freq=str(s_step) + 'S')
+        date_range = date_range[:-1]
+
+        # convert demands to kW for plotting
+        dhw_demand = [dem_step / 1000 for dem_step in dhw_demand]
+
+        # make dataframe for plotting with seaborn
+        dhw_demand_df = pd.DataFrame({'DHW Demand': dhw_demand}, index=date_range)
+
+        fig, ax = plt.subplots(figsize=figsize)
+        ax_data = dhw_demand_df[['DHW Demand']]
+        ax = sns.lineplot(data=ax_data, linewidth=0.7, dashes=False, palette=[rwth_blue])
+        ax.legend_.remove()
+
+        # set the x axis ticks
+        # https://matplotlib.org/3.1.1/gallery/ticks_and_spines/date_concise_formatter.html
+        locator = mdates.AutoDateLocator()
+        formatter = mdates.ConciseDateFormatter(locator)
+        formatter.formats = ['%y', '%b', '%d', '%H:%M', '%H:%M', '%S.%f', ]
+        formatter.zero_formats = [''] + formatter.formats[:-1]
+        formatter.zero_formats[3] = '%d-%b'
+        formatter.offset_formats = ['', '%Y', '%b %Y', '%d %b %Y', '%d %b %Y', '%d %b %Y %H:%M', ]
+        ax.xaxis.set_major_locator(locator)
+        ax.xaxis.set_major_formatter(formatter)
+
+        plt.ylabel('DHW demand in kW')
+
+        plt.show()
+        if save_fig:
+            fig.savefig(os.path.join(dir_output + "/DHW_Demand.pdf"))
+            # fig.savefig(os.path.join(dir_output + "DemGenDemands_" + str(house_type) + ".png"), dpi=600)
+
     if start_in_summer:
         half = int((len(dhw_demand) - 1) / 2)  # half the length of the demand timeseries
         dhw_demand = dhw_demand[half:] + dhw_demand[:half]  # shift demand by half a year
@@ -620,6 +706,9 @@ def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interva
     elif house_type == 'Old':
         heat_profile_file = '/demand_profiles/DemGen/Heat_demand_Berlin_200qm_SingleFamilyHouse_SIA_Bestand_Values.txt'
         cold_profile_file = '/demand_profiles/DemGen/Cool_demand_Berlin_200qm_SingleFamilyHouse_SIA_Bestand_Values.txt'
+    elif house_type == 'Custom':
+        cold_profile_file = '/demand_profiles/DemGen/Cool_demand_Berlin_200qm_SingleFamiliyHouse_3xAmount_samePeak_Standard.txt'
+        heat_profile_file = '/demand_profiles/DemGen/Heat_demand_Berlin_200qm_SingleFamilyHouse_SIA_standard_Values.txt'
     elif house_type == 'New':
         raise Exception("Not Implemented yet")
     else:
@@ -690,7 +779,6 @@ def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interva
         sns.set_palette(sns.color_palette(rwth_colors_all))  # does nothing? specify colors with palette=[c1, c2..]
 
         plt.style.use("/Users/jonasgrossmann/git_repos/matplolib-style/ebc.paper.mplstyle")
-        sns.set()
         sns.set_style("white")
         sns.set_context("paper")
 
@@ -707,7 +795,7 @@ def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interva
                                                 'Cold Demand': cold_demand},
                                                index=date_range)
 
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=figsize)
         ax_data = heat_and_cold_demand_df[['Heat Demand', 'Cold Demand']]
         ax = sns.lineplot(data=ax_data, linewidth=0.7, dashes=False, palette=[rwth_red, rwth_blue])
 
