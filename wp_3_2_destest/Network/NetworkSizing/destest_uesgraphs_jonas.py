@@ -67,6 +67,7 @@ def main():
         dir_sciebo = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data"
     elif platform.system() == 'Windows':
         dir_sciebo = "D:/mma-jgr/sciebo-folder/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data"
+        dir_home = "D:/mma-jgr"
     else:
         raise Exception("Unknown operating system")
     dir_output = dir_sciebo + "/plots"
@@ -77,6 +78,7 @@ def main():
     dhw_demand = import_from_dhwcalc(dir_sciebo, plot_demand=False, start_in_summer=True)
     heat_demand_old, cold_demand_old = import_demands_from_demgen(dir_sciebo, house_type='Old')
     heat_demand_standard, cold_demand_standard = import_demands_from_demgen(dir_sciebo, house_type='Standard')
+    heat_demand_standard, cold_demand_standard_3x = import_demands_from_demgen(dir_sciebo, house_type='Custom')
 
     heat_and_dhw_demand_basecase = [sum(i) for i in zip(heat_demand_old, dhw_demand)]
     heat_and_dhw_demand_case1a = [sum(i) for i in zip(heat_demand_standard, dhw_demand)]
@@ -113,10 +115,9 @@ def main():
         # ----------------- Pressure Control -------------------------
         'graph__p_nominal': [1.5e5],
         "pressure_control_supply": "Destest_Supply",  # Name of the supply that controls the pressure
-        "pressure_control_dp": [0.25e5, 0.5e5, 1.5e5],  # Pressure difference to be held at reference building
+        "pressure_control_dp": [0.5e5],  # Pressure difference to be held at reference building
         "pressure_control_building": "max_distance",  # reference building for the network
-        "pressure_control_p_max": [0.5e5, 1e5, 2e5],
-        # Maximum pressure allowed for the pressure controller (should be max_dp it can supply?)
+        "pressure_control_p_max": [4e5],  # Maximum pressure allowed for the pressure controller (should be max_dp it can supply?)
         "pressure_control_k": 12,  # gain of controller
         "pressure_control_ti": 5,  # time constant for integrator block
     }
@@ -127,7 +128,6 @@ def main():
         'graph__t_ground': ground_temps,
         'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
     }
-
 
     params_base_case = {
         # ----------------- General/Graph Data --------------------------
@@ -167,17 +167,20 @@ def main():
         'model_demand': aixlib_dhc + "Demands.ClosedLoop.ValveControlledHeatPumpDirectCoolingDHWnoStoragePIcontrol",
         'demand__heat_input': heat_demand_old,
         'input_heat_str': 'heat_input',
-        'demand__cold_input': cold_demand_standard,
+        'demand__cold_input': cold_demand_standard_3x,
         'demand__dhw_input': storage_load,
         'demand__T_dhw_supply': [273.15 + 65],  # T_VL DHW
+        'demand__T_heat_supply': [273.15 + 60],     # Case 1B still has old radiators
+        'demand__T_cold_supply': [273.15 + 5],      # Case 1B still has old radiators
+        'demand__T_threshhold_dc': [273.15 + 5],
         'demand__dT_Network': [4, 6],
         'demand__heatDemand_max': max(heat_demand_old),
-        'demand__coldDemand_max': max(cold_demand_standard),
+        'demand__coldDemand_max': max(cold_demand_standard_3x),
         # ------------------------------ Supply Node Data --------------------------
         # 'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPumpHPandCC',
         'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPumpRevHP',
         'supply__TIn': [273.15 + 20, 273.15 + 15],  # -> t_supply
-        'supply__dpIn': [4e5],  # p_supply
+        'supply__dpIn': [4e5],  # dp_supply -> overwritten by pressure controller?
         "supply__TIn_HP_Source": ground_temps,
         "supply__NetworkcoldDemand_max": 16 * max(cold_demand_standard),
         "supply__NetworkheatDemand_max": 16 * max(heat_demand_old),
@@ -191,12 +194,15 @@ def main():
         'model_demand': aixlib_dhc + "Demands.ClosedLoop.ValveControlledHeatPumpDirectCoolingDHWnoStoragePIcontrol",
         'demand__heat_input': heat_demand_standard,
         'input_heat_str': 'heat_input',
-        'demand__cold_input': cold_demand_standard,
+        'demand__cold_input': cold_demand_standard_3x,
         'demand__dhw_input': storage_load,
         'demand__T_dhw_supply': [273.15 + 65],  # T_VL DHW
+        'demand__T_heat_supply': [273.15 + 35],     # Case 1C still has old radiators
+        'demand__T_cold_supply': [273.15 + 15],      # Case 1C still has old radiators
+        'demand__T_threshhold_dc': [273.15 + 14, 273.15 + 18],
         'demand__dT_Network': [4, 6],
         'demand__heatDemand_max': max(heat_demand_standard),
-        'demand__coldDemand_max': max(cold_demand_standard),
+        'demand__coldDemand_max': max(cold_demand_standard_3x),
         # ------------------------------ Supply Node Data --------------------------
         # 'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPumpHPandCC',
         'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPumpRevHP',
@@ -214,12 +220,15 @@ def main():
         'model_demand': aixlib_dhc + "Demands.ClosedLoop.ValveControlledHeatPumpDirectCoolingDHWnoStoragePIcontrol",
         'demand__heat_input': heat_demand_standard,
         'input_heat_str': 'heat_input',
-        'demand__cold_input': cold_demand_standard,
+        'demand__cold_input': cold_demand_standard_3x,
         'demand__dhw_input': storage_load,
         'demand__T_dhw_supply': [273.15 + 65],  # T_VL DHW
+        'demand__T_heat_supply': [273.15 + 35],     # Case 1C still has old radiators
+        'demand__T_cold_supply': [273.15 + 15],      # Case 1C still has old radiators
+        'demand__T_threshhold_dc': [273.15 + 14, 273.15 + 18],
         'demand__dT_Network': [4, 6],
         'demand__heatDemand_max': max(heat_demand_standard),
-        'demand__coldDemand_max': max(cold_demand_standard),
+        'demand__coldDemand_max': max(cold_demand_standard_3x),
         # ------------------------------ Supply Node Data --------------------------
         # 'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPumpHPandCC',
         'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPumpRevHP',
@@ -245,6 +254,7 @@ def main():
     parameter_study(params_dict_case1b, dir_sciebo)
     parameter_study(params_dict_case1c, dir_sciebo)
     parameter_study(params_dict_case2, dir_sciebo)
+
 
 def convert_dhw_load_to_storage_load(dhw_demand, dir_output, s_step=600, V_stor=300, dT_stor=55, dT_threshhold=10,
                                      Qcon_flow_max=5000, plot_cum_demand=False, with_losses=True,
@@ -377,7 +387,13 @@ def convert_dhw_load_to_storage_load(dhw_demand, dir_output, s_step=600, V_stor=
                            rwth_orange_50, rwth_red_50, rwth_yellow_50]
         sns.set_palette(sns.color_palette(rwth_colors_all))  # does nothing? specify colors with palette=[c1, c2..]
 
-        plt.style.use("/Users/jonasgrossmann/git_repos/matplolib-style/ebc.paper.mplstyle")
+        if platform.system() == 'Darwin':
+            dir_home = "/Users/jonasgrossmann"
+        elif platform.system() == 'Windows':
+            dir_home = "D:/mma-jgr"
+        else:
+            raise Exception("Unkown Operating System")
+        plt.style.use(dir_home + "/git_repos/matplolib-style/ebc.paper.mplstyle")
         sns.set()
         sns.set_style("white")
         sns.set_context("paper")
@@ -793,7 +809,7 @@ def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interva
             fig.savefig(os.path.join(dir_output + "/DemGenDemands_" + str(house_type) + ".pdf"))
             # fig.savefig(os.path.join(dir_output + "DemGenDemands_" + str(house_type) + ".png"), dpi=600)
 
-    plot_for_thesis = True
+    plot_for_thesis = False
     if plot_for_thesis:
 
         # RWTH colours
@@ -811,7 +827,14 @@ def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interva
                            rwth_orange_50, rwth_red_50, rwth_yellow_50]
         sns.set_palette(sns.color_palette(rwth_colors_all))  # does nothing? specify colors with palette=[c1, c2..]
 
-        plt.style.use("/Users/jonasgrossmann/git_repos/matplolib-style/ebc.paper.mplstyle")
+        if platform.system() == 'Darwin':
+            dir_home = "/Users/jonasgrossmann"
+        elif platform.system() == 'Windows':
+            dir_home = "D:/mma-jgr"
+        else:
+            raise Exception("Unkown Operating System")
+        plt.style.use(dir_home + "/git_repos/matplolib-style/ebc.paper.mplstyle")
+        sns.set()
         sns.set_style("white")
         sns.set_context("paper")
 
@@ -820,12 +843,12 @@ def import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interva
         date_range = date_range[:-1]
 
         # convert demands to kW for plotting
-        heat_demand = [dem_step / 1000 for dem_step in heat_demand]
-        cold_demand = [dem_step / 1000 for dem_step in cold_demand]
+        heat_demand_kW = [dem_step / 1000 for dem_step in heat_demand]
+        cold_demand_kW = [dem_step / 1000 for dem_step in cold_demand]
 
         # make dataframe for plotting with seaborn
-        heat_and_cold_demand_df = pd.DataFrame({'Heat Demand': heat_demand,
-                                                'Cold Demand': cold_demand},
+        heat_and_cold_demand_df = pd.DataFrame({'Heat Demand': heat_demand_kW,
+                                                'Cold Demand': cold_demand_kW},
                                                index=date_range)
 
         fig, ax = plt.subplots(figsize=figsize)
@@ -1079,7 +1102,7 @@ def generate_model(params_dict, dir_sciebo, s_step=600, save_params_to_csv=True)
                 simple_district.edges[edge[0], edge[1]][
                     params_dict_key.replace('edge__', '')] = params_dict[params_dict_key]
 
-    # size pipe diameter
+    # size pipe diameter, writes 'diameter'
     simple_district = utils.size_hydronic_network(
         graph=simple_district,
         network_type="heating",
@@ -1091,13 +1114,20 @@ def generate_model(params_dict, dir_sciebo, s_step=600, save_params_to_csv=True)
     for edge in simple_district.edges():
         simple_district.edges[edge[0], edge[1]]['dh'] = simple_district.edges[edge[0], edge[1]]['diameter']
 
-    # write insulation thickness to the graph edges
-    for i in list(simple_district.edges):
-        simple_district.edges[i]['dIns'] = PipeDim.giveInsulation(simple_district.edges[i]['dh'])
+    # write insulation thickness to the graph edges. if the dT of the Network is bigger than 10K, its likely to be
+    # a Network of the 3-4 generation, and thus it has isolated pipes. Networks of the 5th generation usually have a
+    # dT of 4-8K, and are comprised by plastic pipes with hardly any or no isolation.
+    if params_dict['size_dT_Network'] >= 10:
+        for i in list(simple_district.edges):
+            simple_district.edges[i]['dIns'] = PipeDim.giveInsulation(simple_district.edges[i]['dh'])
+    else:
+        for i in list(simple_district.edges):
+            simple_district.edges[i]['dIns'] = 0.01 * PipeDim.giveInsulation(simple_district.edges[i]['dh'])
 
     # write m_flow_nominal to the graphs edges with uesgraph function
     sysmod_utils.estimate_m_flow_nominal(graph=simple_district, dT_design=params_dict['demand__dT_Network'],
-                                         network_type='heating', input_heat_str=params_dict['input_heat_str'])
+                                         network_type='heating', input_heat_str=params_dict['input_heat_str'],
+                                         method='median')
 
     # get the maximum m_flow_nominal from the edges (set by the estimate_m_flow_nominal function)
     m_flow_nominal_max = 0
@@ -1117,14 +1147,14 @@ def generate_model(params_dict, dir_sciebo, s_step=600, save_params_to_csv=True)
             simple_district.nodes[bldg]["m_flow_nominal"] = m_flow_nominal_supply
 
     # --------------- Visualization, Save  ----------------
-    vis = ug.Visuals(simple_district)  # Plotting / Visualization with pipe diameters scaling
-    vis.show_network(
-        save_as="uesgraph_destest_16_selfsized_jonas.png",
-        show_diameters=True,
-        scaling_factor=15,
-        labels="name",
-        label_size=10,
-        scaling_factor_diameter=100)
+    # vis = ug.Visuals(simple_district)  # Plotting / Visualization with pipe diameters scaling
+    # vis.show_network(
+    #     save_as="uesgraph_destest_16_selfsized_jonas.png",
+    #     show_diameters=True,
+    #     scaling_factor=15,
+    #     labels="name",
+    #     label_size=10,
+    #     scaling_factor_diameter=100)
 
     dir_models = os.path.join(dir_sciebo, 'models')
     if not os.path.exists(dir_models):
