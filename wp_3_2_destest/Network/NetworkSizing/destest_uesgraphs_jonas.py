@@ -73,23 +73,33 @@ def main():
     dir_output = dir_sciebo + "/plots"
 
     # ------------------------------------ demand profiles---------------------------------------------
-    ground_temps = import_ground_temp_table(dir_sciebo, plot_series=False, start_in_summer=True)
+    ground_temps = import_ground_temp_table(dir_sciebo, plot_series=False)
 
-    dhw_demand = import_from_dhwcalc(dir_sciebo, plot_demand=False, start_in_summer=True)
+    dhw_demand = import_from_dhwcalc(dir_sciebo, plot_demand=False)
     heat_demand_old, cold_demand_old = import_demands_from_demgen(dir_sciebo, house_type='Old')
     heat_demand_standard, cold_demand_standard = import_demands_from_demgen(dir_sciebo, house_type='Standard')
-    heat_demand_standard, cold_demand_standard_3x = import_demands_from_demgen(dir_sciebo, house_type='Custom')
 
     heat_and_dhw_demand_basecase = [sum(i) for i in zip(heat_demand_old, dhw_demand)]
     heat_and_dhw_demand_case1a = [sum(i) for i in zip(heat_demand_standard, dhw_demand)]
 
     storage_load = convert_dhw_load_to_storage_load(dhw_demand, dir_output, with_losses=True,
-                                                    plot_cum_demand=True,
+                                                    plot_cum_demand=False, Qcon_flow_max=5000,
                                                     start_plot='2019-07-14-09', end_plot='2019-07-15-12')
+
+    storage_load_standard = convert_dhw_load_to_storage_load(dhw_demand, dir_output, with_losses=True,
+                                                             plot_cum_demand=False, Qcon_flow_max=3000,
+                                                             start_plot='2019-07-14-09', end_plot='2019-07-15-12')
+
+    # case 2
+    supp_temps_25_20 = make_custom_supply_temp_profile(winter_supp_temp=273.15 + 25, summer_supp_temp=273.15 + 20)
+    supp_temps_25_15 = make_custom_supply_temp_profile(winter_supp_temp=273.15 + 25, summer_supp_temp=273.15 + 15)
+    # case 1B-1C
+    supp_temps_20_14 = make_custom_supply_temp_profile(winter_supp_temp=273.15 + 20, summer_supp_temp=273.15 + 14)
+    supp_temps_20_135 = make_custom_supply_temp_profile(winter_supp_temp=273.15 + 20, summer_supp_temp=273.15 + 13.5)
 
     # ----------- Parameter Dictionaries to pass into parameter study function ----------------
 
-    # ---- constants ----
+    # ---- pipes, pressure control and general data ----
     aixlib_dhc = "AixLib.Fluid.DistrictHeatingCooling."
     params_pipes = {
         # ----------------- Pipe/Edge Data ----------------
@@ -103,7 +113,8 @@ def main():
     }
     params_pipes_new = {
         # ----------------- Pipe/Edge Data ----------------
-        'model_pipe': 'AixLib.Fluid.FixedResistances.PlugFlowPipe',
+        # 'model_pipe': 'AixLib.Fluid.FixedResistances.PlugFlowPipe',
+        'model_pipe': 'AixLib.Fluid.DistrictHeatingCooling.Pipes.PlugFlowPipeEmbedded',
         'edge__fac': 1.0,
         'edge__roughness': 2.5e-5,
         'edge__kIns': [0.035],  # U-Value, konstant im Destest
@@ -117,7 +128,8 @@ def main():
         "pressure_control_supply": "Destest_Supply",  # Name of the supply that controls the pressure
         "pressure_control_dp": [0.5e5],  # Pressure difference to be held at reference building
         "pressure_control_building": "max_distance",  # reference building for the network
-        "pressure_control_p_max": [4e5],  # Maximum pressure allowed for the pressure controller (should be max_dp it can supply?)
+        "pressure_control_p_max": [4e5],
+        # Maximum pressure allowed for the pressure controller (should be max_dp it can supply?)
         "pressure_control_k": 12,  # gain of controller
         "pressure_control_ti": 5,  # time constant for integrator block
     }
@@ -128,7 +140,17 @@ def main():
         'graph__t_ground': ground_temps,
         'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
     }
+    params_general_data_glycol = {
+        # ------------------ General/Graph Data ---------------------
+        'graph__network_type': 'heating',
+        'model_ground': "t_ground_table",
+        'graph__t_ground': ground_temps,
+        # 'model_medium': "AixLib.Media.Specialized.Water.ConstantProperties_pT",
+        'model_medium': 'AixLib.Media.Antifreeze.PropyleneGlycolWater',
+        'model_medium_fraction_glycol': 0.5,
+    }
 
+    # ------- substation and central unit data for different scenarios ------
     params_base_case = {
         # ----------------- General/Graph Data --------------------------
         'save_name': "CaseBase",
@@ -147,7 +169,7 @@ def main():
     params_case1a = {
         # ------------------ General/Graph Data -----------------------------------
         'save_name': "Case1A",
-        'graph__t_nominal': [273.15 + 80],
+        'graph__t_nominal': [273.15 + 65],
         # ------------------------- Demand/House Node Data ------------------------
         'model_demand': aixlib_dhc + "Demands.ClosedLoop.ValveControlledHXPIcontrol",
         'demand__Q_flow_input': heat_and_dhw_demand_case1a,
@@ -156,7 +178,7 @@ def main():
         'demand__Q_flow_nominal': max(heat_and_dhw_demand_case1a),
         # ------------------------------ Supply Node Data --------------------------
         'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPump',
-        'supply__TIn': [273.15 + 90],  # -> t_supply
+        'supply__TIn': [273.15 + 75],  # -> t_supply
         'supply__dpIn': [4e5],  # p_supply -> overwritten from pressure_control_p_max?
     }
     params_case1b = {
@@ -167,19 +189,19 @@ def main():
         'model_demand': aixlib_dhc + "Demands.ClosedLoop.ValveControlledHeatPumpDirectCoolingDHWnoStoragePIcontrol",
         'demand__heat_input': heat_demand_old,
         'input_heat_str': 'heat_input',
-        'demand__cold_input': cold_demand_standard_3x,
+        'demand__cold_input': cold_demand_standard,
         'demand__dhw_input': storage_load,
         'demand__T_dhw_supply': [273.15 + 65],  # T_VL DHW
-        'demand__T_heat_supply': [273.15 + 60],     # Case 1B still has old radiators
-        'demand__T_cold_supply': [273.15 + 5],      # Case 1B still has old radiators
-        'demand__T_threshhold_dc': [273.15 + 5],
+        'demand__T_heat_supply': [273.15 + 65],  # Case 1B still has old radiators
+        'demand__T_cold_supply': [273.15 + 15],  # Case 1B still has old radiators
+        'demand__T_threshhold_dc': [273.15 + 14],
         'demand__dT_Network': [4, 6],
         'demand__heatDemand_max': max(heat_demand_old),
-        'demand__coldDemand_max': max(cold_demand_standard_3x),
+        'demand__coldDemand_max': max(cold_demand_standard),
         # ------------------------------ Supply Node Data --------------------------
         # 'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPumpHPandCC',
         'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPumpRevHP',
-        'supply__TIn': [273.15 + 20, 273.15 + 15],  # -> t_supply
+        'supply__TIn': [273.15 + 20, supp_temps_20_135, supp_temps_20_14],  # -> t_supply
         'supply__dpIn': [4e5],  # dp_supply -> overwritten by pressure controller?
         "supply__TIn_HP_Source": ground_temps,
         "supply__NetworkcoldDemand_max": 16 * max(cold_demand_standard),
@@ -194,19 +216,19 @@ def main():
         'model_demand': aixlib_dhc + "Demands.ClosedLoop.ValveControlledHeatPumpDirectCoolingDHWnoStoragePIcontrol",
         'demand__heat_input': heat_demand_standard,
         'input_heat_str': 'heat_input',
-        'demand__cold_input': cold_demand_standard_3x,
-        'demand__dhw_input': storage_load,
+        'demand__cold_input': cold_demand_standard,
+        'demand__dhw_input': storage_load_standard,
         'demand__T_dhw_supply': [273.15 + 65],  # T_VL DHW
-        'demand__T_heat_supply': [273.15 + 35],     # Case 1C still has old radiators
-        'demand__T_cold_supply': [273.15 + 15],      # Case 1C still has old radiators
-        'demand__T_threshhold_dc': [273.15 + 14, 273.15 + 18],
+        'demand__T_heat_supply': [273.15 + 35],  # Case 1C still has old radiators
+        'demand__T_cold_supply': [273.15 + 15],  # Case 1C still has old radiators
+        'demand__T_threshhold_dc': [273.15 + 14],
         'demand__dT_Network': [4, 6],
         'demand__heatDemand_max': max(heat_demand_standard),
-        'demand__coldDemand_max': max(cold_demand_standard_3x),
+        'demand__coldDemand_max': max(cold_demand_standard),
         # ------------------------------ Supply Node Data --------------------------
         # 'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPumpHPandCC',
         'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPumpRevHP',
-        'supply__TIn': [273.15 + 20, 273.15 + 15],  # -> t_supply
+        'supply__TIn': [273.15 + 20, supp_temps_20_135, supp_temps_20_14],  # -> t_supply
         'supply__dpIn': [4e5],  # p_supply
         "supply__TIn_HP_Source": ground_temps,
         "supply__NetworkcoldDemand_max": 16 * max(cold_demand_standard),
@@ -220,25 +242,26 @@ def main():
         'model_demand': aixlib_dhc + "Demands.ClosedLoop.ValveControlledHeatPumpDirectCoolingDHWnoStoragePIcontrol",
         'demand__heat_input': heat_demand_standard,
         'input_heat_str': 'heat_input',
-        'demand__cold_input': cold_demand_standard_3x,
-        'demand__dhw_input': storage_load,
+        'demand__cold_input': cold_demand_standard,
+        'demand__dhw_input': storage_load_standard,
         'demand__T_dhw_supply': [273.15 + 65],  # T_VL DHW
-        'demand__T_heat_supply': [273.15 + 35],     # Case 1C still has old radiators
-        'demand__T_cold_supply': [273.15 + 15],      # Case 1C still has old radiators
-        'demand__T_threshhold_dc': [273.15 + 14, 273.15 + 18],
-        'demand__dT_Network': [4, 6],
+        'demand__T_heat_supply': [273.15 + 35],  # Case 1C still has old radiators
+        'demand__T_cold_supply': [273.15 + 15],  # Case 1C still has old radiators
+        'demand__T_threshhold_dc': [273.15 + 14],
+        'demand__dT_Network': [4],
         'demand__heatDemand_max': max(heat_demand_standard),
-        'demand__coldDemand_max': max(cold_demand_standard_3x),
+        'demand__coldDemand_max': max(cold_demand_standard),
         # ------------------------------ Supply Node Data --------------------------
         # 'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPumpHPandCC',
         'model_supply': aixlib_dhc + 'Supplies.ClosedLoop.IdealPlantPumpRevHP',
-        'supply__TIn': [273.15 + 20, 273.15 + 15],  # -> t_supply
+        'supply__TIn': [273.15 + 25, 273.15 + 20, supp_temps_25_15, supp_temps_25_20, supp_temps_20_14],  # -> t_supply
         'supply__dpIn': [4e5],  # p_supply
         "supply__TIn_HP_Source": ground_temps,
         "supply__NetworkcoldDemand_max": 16 * max(cold_demand_standard),
         "supply__NetworkheatDemand_max": 16 * max(heat_demand_standard),
     }
 
+    # ----- combine to master dictionaries for each scenario -------
     params_old_network = merge_dicts(params_pipes, params_pressure_control, params_general_data)
     params_new_network = merge_dicts(params_pipes_new, params_pressure_control, params_general_data)
 
@@ -254,6 +277,32 @@ def main():
     parameter_study(params_dict_case1b, dir_sciebo)
     parameter_study(params_dict_case1c, dir_sciebo)
     parameter_study(params_dict_case2, dir_sciebo)
+
+
+def make_custom_supply_temp_profile(winter_supp_temp, summer_supp_temp, output_interval=600):
+    """
+    Makes custom supply list for the winter and summer period. Useful for reduced heating demands during summer.
+    :param winter_supp_temp: Temperature during Winter period
+    :param summer_supp_temp: Temperature during summer period
+    :param output_interval: seconds within a time-step (usaully 600 (10mins) or 3600 (1hour)
+    :return:
+    """
+    len_first_heating_period = 31 + 28 + 31
+    len_cooling_period = 30 + 31 + 30 + 31 + 31 + 30
+    len_second_heating_period = 31 + 30 + 31
+
+    first_heating_period_hours = [winter_supp_temp] * len_first_heating_period * 24
+    cooling_period_hours = [summer_supp_temp] * len_cooling_period * 24
+    second_heating_period_hours = [winter_supp_temp] * len_second_heating_period * 24
+
+    supply_temps = first_heating_period_hours + cooling_period_hours + second_heating_period_hours
+
+    # stretch out the list to match a given output interval. F.e: [2,4] -> steps = 3 ->[2,2,2,4,4,4]
+    steps = 3600 / output_interval
+    supply_temps = [[dem] * int(steps) for dem in supply_temps]  # list of lists
+    supply_temps = [dem for dem_step in supply_temps for dem in dem_step]  # flatten list
+
+    return supply_temps
 
 
 def convert_dhw_load_to_storage_load(dhw_demand, dir_output, s_step=600, V_stor=300, dT_stor=55, dT_threshhold=10,
@@ -293,6 +342,7 @@ def convert_dhw_load_to_storage_load(dhw_demand, dir_output, s_step=600, V_stor=
     Q_full = m_w * c_p * dT_stor
     dQ_threshhold = m_w * c_p * dT_threshhold
     Q_dh_timestep = Qcon_flow_max * s_step  # energy added in 1 timestep
+    # Todo: implement a ramp-up period?
 
     # ---------- write storage load time series, with Losses --------
     Q_storr_curr = Q_full  # tracks the Storage Filling
@@ -494,7 +544,6 @@ def convert_dhw_load_to_storage_load(dhw_demand, dir_output, s_step=600, V_stor=
 def generate_dhw_profile_pycity(plot_demand=False):
     """
     from https://github.com/RWTH-EBC/pyCity
-    Problem: a lot of parameters, every time a different dhw profile
     :return:
     """
     #  Generate environment with timer, weather, and prices objects
@@ -513,7 +562,7 @@ def generate_dhw_profile_pycity(plot_demand=False):
         environment=environment,
         t_flow=60,  # DHW output temperature in degree Celsius
         method=2,  # Stochastic dhw profile, Method 1 not working
-        supply_temperature=25,  # DHW inlet flow temperature in degree C.
+        supply_temperature=10,  # DHW inlet flow temperature in degree C.
         occupancy=occupancy.occupancy)  # Occupancy profile (600 sec resolution)
     dhw_demand = dhw_obj.loadcurve  # ndarray with 8760 timesteps in Watt
 
@@ -1116,7 +1165,7 @@ def generate_model(params_dict, dir_sciebo, s_step=600, save_params_to_csv=True)
 
     # write insulation thickness to the graph edges. if the dT of the Network is bigger than 10K, its likely to be
     # a Network of the 3-4 generation, and thus it has isolated pipes. Networks of the 5th generation usually have a
-    # dT of 4-8K, and are comprised by plastic pipes with hardly any or no isolation.
+    # dT of 4-6K, and are comprised by plastic pipes with hardly any or no isolation.
     if params_dict['size_dT_Network'] >= 10:
         for i in list(simple_district.edges):
             simple_district.edges[i]['dIns'] = PipeDim.giveInsulation(simple_district.edges[i]['dh'])
@@ -1173,6 +1222,8 @@ def generate_model(params_dict, dir_sciebo, s_step=600, save_params_to_csv=True)
     new_model.set_connection(remove_network_nodes=True)
 
     new_model.add_return_network = True
+    if ("Glycol" or "glycol") in params_dict['model_medium']:
+        new_model.fraction_glycol = params_dict['model_medium_fraction_glycol']
     new_model.medium = params_dict['model_medium']
     new_model.medium_building = params_dict['model_medium']
     new_model.T_nominal = params_dict['graph__t_nominal']
