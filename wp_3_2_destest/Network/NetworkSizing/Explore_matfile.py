@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import os
 from pathlib import Path
 import shutil
@@ -57,154 +58,206 @@ def main():
 
     dir_output = dir_sciebo + "/plots"
     dir_models = dir_sciebo + "/models"
-    dir_case1_some = dir_sciebo + "/saved_models/case1_some"
-    dir_case1 = dir_sciebo + "/saved_models/case1"
-    dir_case1C = dir_micha + "/saved_models/case1C"
-    dir_basecase = dir_micha + "/saved_models/basecase"
-    dir_case1B_1C = dir_micha + "/saved_models/case1B_1C"
-    dir_case1A_BC = dir_micha + "/saved_models/case1A_BC"
-    # dir_basecase = dir_micha + "/saved_models/basecase_dp"
 
     dir_case1C = dir_micha + "/final_models/case_1C"
     dir_case1B = dir_micha + "/final_models/case_1B"
     dir_case_BC_1A = dir_micha + "/final_models/Case_BC_1A"
     dir_case_1B_1C = dir_micha + "/final_models/Case_1B_1C"
+    dir_case1A = dir_micha + "/final_models/case_1A"
+    dir_caseBC = dir_micha + "/final_models/Case_BC"
+    dir_case2 = dir_micha + '/final_models/case_2'
 
-    dir_models = dir_case_BC_1A
+    # dir_models = dir_case1C
+
+    # plot_kpis()
+    plot_kpis_1A_1C()
+    #
+    # study_df = load_study_df(dir_models=dir_models)
+    # changing_vars, study_df_reduced = reduce_and_update_study_df(dir_models=dir_models)
+
+    # study_df_reduced_dropped = study_df_reduced.drop('Case1C_2020_12_17_00_19_38')
+    # study_df_reduced_dropped = study_df_reduced_dropped.drop('Case1C_2020_12_17_00_20_03')
+
+    # changing_vars_c1, study_df_reduced_c1 = compute_all_KPIs(dir_sciebo=dir_sciebo,
+    #                                                          dir_models=dir_models,
+    #                                                          case="Case1",
+    #                                                          # case='CaseBase',
+    #                                                          )
+
+    selected_dir = st.radio(
+        label="Choose models folder",
+        options=[dir_caseBC, dir_case1A, dir_case_BC_1A, dir_case1B, dir_case1C, dir_case_1B_1C, dir_case2])
+    dir_models = selected_dir
 
     study_df = load_study_df(dir_models=dir_models)
     changing_vars, study_df_reduced = reduce_and_update_study_df(dir_models=dir_models)
 
-    # ------- compute KPIs -------
-    # changing_vars_bc, study_df_reduced_bc = compute_all_KPIs(dir_sciebo=dir_sciebo,
-    #                                                          dir_models=dir_models, case="CaseBase")
-    #
-    # changing_vars_c1, study_df_reduced_c1 = compute_all_KPIs(dir_sciebo=dir_sciebo,
-    #                                                          dir_models=dir_models, case="Case1")
-
-    # study_df_reduced = study_df_reduced_bc
-    # changing_vars = changing_vars_c1
-
-    # write_const_to_study_csv(dir_models=dir_models, const_name_end='cor.del.dh', column_name='dh')
-    study_df_reduced = pd.read_csv(dir_models + "/study_reduced.csv", index_col=0)
-
-    # --------------------- get a list of all variables --------------------------
-    all_vars_lst = read_trajectory_names_folder(res_dir=dir_models, only_from_first_sim=True)
-
-    # ---------------------------- making sublists, Case 1 ----------------------------
-    all_sublists = {}
-    # add_to_sublists(all_sublists, 'Fluid_Velocity', all_vars_lst, sig1=".cor.del.v", sig2="pipe", anti_sig1="R")
-    # add_to_sublists(all_sublists, 'Return_Temp_Substations_after_del', all_vars_lst, sig1='del1.T')
-    # add_to_sublists(all_sublists, 'Return_Temp_Substations_before_del', all_vars_lst, sig1='senTem_return.T')
-    # add_to_sublists(all_sublists, 'Pressure_Drop_Substations', all_vars_lst, sig1='dpOut')
-    # add_to_sublists(all_sublists, 'Supply_Temp_Substation', all_vars_lst, sig1='senTem_supply.T')
-    # add_to_sublists(all_sublists, 'P_el_Substations', all_vars_lst, end='P_el.y')
-    # add_to_sublists(all_sublists, 'P_el_central_Pump', all_vars_lst, sig1='Supply.fan.P')
-    # to_comb_sublist(all_sublists, 'Supp_and_Ret_Temps', all_vars_lst, 'senTem_supply.T', 'del1.T')
-    # demands_lst = ['networkModel.SimpleDistrict_7dhw_input', 'networkModel.SimpleDistrict_7heat_input',
-    #                'networkModel.SimpleDistrict_7cold_input']
-    # add_to_sublists(all_sublists, 'Demands', demands_lst)
-
-    # ---------------------------- making sublists, BaseCase ----------------------------
-
-    add_to_sublists(all_sublists, 'P_el_central_heater', all_vars_lst, 'Supply.heater.Q_flow')  # only in BaseCase
-
-    # ---- very specific lists --------
-
-    pipes_lst = ["networkModel.pipe1001to1005.cor.del.v", 'networkModel.pipe1022to1025R.cor.del.v',
-                 'networkModel.pipe1005to1020.cor.del.v']
-    pipes_names_lst = ['Pipe 1-5', 'Pipe 22-25', 'Pipe 5-20']
     pipes_dict = {
         "networkModel.pipe1001to1005.cor.del.v": 'Pipe 1-5',
         'networkModel.pipe1022to1025R.cor.del.v': 'Pipe 22-25',
         'networkModel.pipe1005to1020.cor.del.v': 'Pipe 5-20'
     }
+    pipes_embedded_dict = {
+        "networkModel.pipe1001to1005.v_water": 'Pipe 1-5',
+        'networkModel.pipe1022to1025R.v_water': 'Pipe 22-25',
+        'networkModel.pipe1005to1020.v_water': 'Pipe 5-20'
+    }
 
-    add_to_sublists(all_sublists, 'Fluid_Velocity_in_m/s', pipes_lst)
+    demands_dict_5G = {
+        'networkModel.SimpleDistrict_7dhw_input': 'DHW',
+        'networkModel.SimpleDistrict_7heat_input': 'Heat',
+        'networkModel.SimpleDistrict_7cold_input': 'Cold'
+    }
+    demands_dict_3G = {
+        'networkModel.SimpleDistrict_7Q_flow_input': 'Heat and DHW',
+    }
 
-    # make one list that inclesed all the sublsits variables
+    temps_dict_5G = {
+        'networkModel.demandSimpleDistrict_14.senTem_supply.T': 'Supply Temperature SD14',
+        'networkModel.demandSimpleDistrict_14.del1.T': 'Return Temperature SD14',
+        'networkModel.demandSimpleDistrict_14.senTem_afterFreeCool.T': 'Temperature after Free-Cooling SD14',
+        'networkModel.demandSimpleDistrict_4.senTem_supply.T': 'Supply Temperature SD4',
+        'networkModel.demandSimpleDistrict_4.del1.T': 'Return Temperature SD4',
+        'networkModel.demandSimpleDistrict_4.senTem_afterFreeCool.T': 'Temperature after Free-Cooling SD4',
+    }
+    temps_dict_3G = {
+        'networkModel.demandSimpleDistrict_14.senT_supply.T': 'Supply Temperature SD14',
+        'networkModel.demandSimpleDistrict_14.senT_return.T': 'Return Temperature SD14',
+        'networkModel.demandSimpleDistrict_4.senT_supply.T': 'Supply Temperature SD4',
+        'networkModel.demandSimpleDistrict_4.senT_return.T': 'Return Temperature SD4',
+    }
+    ground_temp = {'networkModel.TGroundIn': 'Ground Temperature'}
+
+    direct_coling = {
+        "networkModel.demandSimpleDistrict_4.HX.heatPort.Q_flow": 'Direct Cooling SD4',
+        "networkModel.demandSimpleDistrict_14.HX.heatPort.Q_flow": 'Direct Cooling SD14'
+    }
+
+    sub_dicts_3G = {
+        'Flow Velocities in [m/s]': pipes_dict,
+        'Demands in [W]': demands_dict_3G,
+        'Temperature in [K]': temps_dict_3G,
+        'Ground Temp in [K]': ground_temp,
+    }
+
+    sub_dicts_5G = {
+        'Flow Velocity in [m/s]': pipes_dict,
+        'Demand': demands_dict_5G,
+        'Temperature in [K]': temps_dict_5G,
+        'Heat Flow HX in [W]': direct_coling,
+        'Ground Temp in [K]': ground_temp,
+    }
+
+    sub_dicts_5G_embedded = {
+        'Flow Velocity in [m/s]': pipes_embedded_dict,
+        'Demand': demands_dict_5G,
+        'Temperature in [K]': temps_dict_5G,
+        'Ground Temperature in [K]': ground_temp,
+    }
+
+    if selected_dir in [dir_case1C, dir_case1B, dir_case_1B_1C]:
+        sub_dicts = sub_dicts_5G
+    elif selected_dir in [dir_case_BC_1A, dir_case1A, dir_caseBC]:
+        sub_dicts = sub_dicts_3G
+    elif selected_dir in [dir_case2]:
+        sub_dicts = sub_dicts_5G_embedded
+    else:
+        raise Exception("wrong dir")
+
     all_selected_vars_lst = []
-    for var_lst in all_sublists.values():
-        all_selected_vars_lst += var_lst
-
-    # --------- instead of lists, make dicts: -----------
-
-    pipes_dict = {
-        "networkModel.pipe1001to1005.cor.del.v": 'Pipe 1-5',
-        'networkModel.pipe1022to1025R.cor.del.v': 'Pipe 22-25',
-        'networkModel.pipe1005to1020.cor.del.v': 'Pipe 5-20'
-    }
-
-
-    master_vars_dict = {
-
-    }
-
+    for var_dict in sub_dicts.values():
+        all_selected_vars_lst += var_dict.keys()
 
     # ---------------------- converting the mat files to dataframes, takes long! -----------------------
     res_dict = mat_files_filtered_to_dict(res_dir=dir_models, var_lst=all_selected_vars_lst)
 
-    # ------------------------------ test plotting ----------------------------------
-    # fig_lst = plot_from_df_looped(res_dict, dir_output, var_lst=all_sublists['Fluid_Velocity_2'],
-    #                               plot_style="Single Variable", dir_models=dir_models,
-    #                               y_label='Fluid_Velocity', save_figs=True,
-    #                               start_date='2019-12-11', end_date='2019-12-12')
-    # plt.show()
-
     # ------------------------------------------- Streamlit ------------------------------------------------------
-    st.sidebar.title("Data Selection for Destest")
-    show_map = st.checkbox('Show Destest Map')
+    st.title("Data Selection for Destest")
+    show_map = st.sidebar.checkbox('Show Destest Map')
     if show_map:
-        destest_map = Image.open('/Users/jonasgrossmann/git_repos/project1/wp_3_2_destest/Network/NetworkSizing'
-                                 '/uesgraph_destest_16_selfsized_jonas.png')
+        destest_map = Image.open('/Users/jonasgrossmann/git_repos/ma_latex/'
+                                 'Latex_folder/Figures/Destest_Layout_with_annotations.png')
         st.image(destest_map, caption='Destest Network Layout', use_column_width=True)
 
     # choose a sublist of variables
     selected_sublist_description = st.sidebar.radio(label="Choose which sublist of variables to plot",
-                                                    options=list(all_sublists.keys()))
+                                                    options=list(sub_dicts.keys()))
     # choose a plot style
     selected_plot_style = st.sidebar.radio(label="Choose Plotstyle", options=['Single Variable', 'Single Simulation'])
 
+    # choose aspect ratio
+    selected_apect_ratio = st.sidebar.radio(label="Choose Aspect Ratio", options=[16 / 9, 21 / 9, 27 / 9])
+    fig_height_plt = (fig_width / selected_apect_ratio) * 0.8
+    figsize_plt = (fig_width, fig_height_plt)
+
     # choose Variables from selected sublist
-    selected_variables_from_sublist = st.sidebar.multiselect(
+    selected_variables_from_sublist = st.multiselect(
         label="If you plot a single Variable per Plot, choose which variable to plot from the chosen sublist",
-        options=all_sublists[selected_sublist_description],
-        default=all_sublists[selected_sublist_description][-2:])
+        options=list(sub_dicts[selected_sublist_description].keys()),
+        default=list(sub_dicts[selected_sublist_description].keys())[-2:]
+    )
 
     # choose Simulations from the res_dict keys and save them as a new plot_res_dict
-    selected_simulation_from_sublist = st.sidebar.multiselect(
+    selected_simulation_from_sublist = st.multiselect(
         label="If you chose to plot a single simulation per Plot, choose which simulation to plot",
         options=list(res_dict.keys()),
-        default=list(res_dict.keys())[0:5])
+        # format_func=format_func_st_short_sim,
+        default=list(res_dict.keys())[0:5]
+    )
     plot_res_dict = {}
     for sim in list(res_dict.keys()):
         if sim in selected_simulation_from_sublist:
             plot_res_dict.update({sim: res_dict[sim]})
 
-    show_changing_vars = st.checkbox("Show changing variables")
+    show_changing_vars = st.sidebar.checkbox("Show changing variables")
     if show_changing_vars:
+        # st.write(study_df_reduced.set_index("short_sim_name"))
         st.write(study_df_reduced)
 
     start_date, end_date = st.slider(
         label="Choose start and end date:",
-        min_value=datetime(2019, 1, 1, 0, 0),
-        max_value=datetime(2020, 1, 1, 0, 0),
+        min_value=datetime(2019, 1, 1),
+        max_value=datetime(2020, 1, 1),
         value=(datetime(2019, 1, 1), datetime(2020, 1, 1))
     )
 
+    # start_date, end_date = st.select_slider(
+    #     'Select a start and end date',
+    #     options=[datetime(2019, 1, 1), datetime(2019, 4, 1),
+    #              datetime(2019, 9, 30), datetime(2020, 1, 1)],
+    #     value=(datetime(2019, 1, 1), datetime(2020, 1, 1)),
+    # )
+
     resample_delta = st.sidebar.radio(label="Choose a resample delta",
-                                      options=['600S', '1800S', 'H', '6H', 'D'],
+                                      options=['600S', '1800S', 'H', '6H', '12H', 'D'],
                                       )
+
+    resample_style = st.sidebar.radio(label="Choose a resample stype",
+                                      options=['max', 'mean'],
+                                      )
+
+    label_stype = st.sidebar.radio(label="Choose a label stype",
+                                   options=['short', 'long'],
+                                   )
+
+    selected_adjust_y_limits = st.sidebar.radio(label="Choose to adjust y-limits",
+                                                options=[True, False],
+                                                )
 
     fig_lst = plot_from_df_looped(
         res_dict=plot_res_dict,
         dir_output=dir_output,
         plot_style=selected_plot_style,
         var_lst=selected_variables_from_sublist,
+        var_dict=sub_dicts[selected_sublist_description],
         dir_models=dir_models,
+        figsize_plt=figsize_plt,
         y_label=selected_sublist_description,
         start_date=start_date, end_date=end_date,
         resample_delta=resample_delta,
+        resample_style=resample_style,
+        label_stype=label_stype,
+        adjust_y_limits=selected_adjust_y_limits,
         save_figs=True)
 
     for fig in fig_lst:
@@ -313,6 +366,44 @@ def create_streamlit_dashboard(all_sublists, res_dict, dir_output, dir_models):
 
     for fig in fig_lst:
         st.pyplot(fig)
+
+
+def format_func_st_short_sim(option):
+    if platform.system() == 'Darwin':
+        dir_micha = "/Users/jonasgrossmann/sciebo/MA_Jonas"
+    elif platform.system() == 'Windows':
+        dir_micha = "D:/mma-jgr/sciebo-folder/MA_Jonas"
+    else:
+        raise Exception("Unknown operating system")
+
+    dir_case1C = dir_micha + "/final_models/case_1C"
+    dir_case1B = dir_micha + "/final_models/case_1B"
+    dir_case1A = dir_micha + "/final_models/case_1A"
+    dir_caseBC = dir_micha + "/final_models/Case_BC"
+    dir_case2 = dir_micha + '/final_models/case_2'
+
+    study_df_caseBC = pd.read_csv(dir_caseBC + "/study_reduced.csv", index_col=0)
+    study_df_case1A = pd.read_csv(dir_case1A + "/study_reduced.csv", index_col=0)
+    study_df_case1B = pd.read_csv(dir_case1B + "/study_reduced.csv", index_col=0)
+    study_df_case1C = pd.read_csv(dir_case1C + "/study_reduced.csv", index_col=0)
+    study_df_case2 = pd.read_csv(dir_case2 + "/study_reduced.csv", index_col=0)
+
+    long_label = option
+
+    if 'CaseBase' in long_label:
+        short_label = study_df_caseBC.loc[study_df_caseBC.index == long_label, 'short_sim_name'].values[0]
+    elif 'Case1A' in long_label:
+        short_label = study_df_caseBC.loc[study_df_case1A.index == long_label, 'short_sim_name'].values[0]
+    elif 'Case1B' in long_label:
+        short_label = study_df_caseBC.loc[study_df_case1B.index == long_label, 'short_sim_name'].values[0]
+    elif 'Case1C' in long_label:
+        short_label = study_df_caseBC.loc[study_df_case1C.index == long_label, 'short_sim_name'].values[0]
+    elif 'Case2' in long_label:
+        short_label = study_df_caseBC.loc[study_df_case2.index == long_label, 'short_sim_name'].values[0]
+    else:
+        short_label = long_label
+
+    return short_label
 
 
 def read_trajectory_names_folder(res_dir, only_from_first_sim=True):
@@ -487,7 +578,7 @@ def add_to_sublists(master_sublists_dict, description, input_var_lst, end="", si
     return {description: sublist}
 
 
-@st.cache()
+# @st.cache()
 def matfile_to_df(res_path, var_lst, output_interval="seconds", s_step=600):
     """
     Takes the .mat file from the result path and saves it as a SimRes Instance. The variables given in the var_lst list
@@ -622,10 +713,15 @@ def reduce_and_update_study_df(dir_models, model_prefix="Case"):
 
     # entries of the study.csv that shouldnt be considered a variable
     no_vars = ['short_sim_name', 'W_tot_kWh', 'GWI', 'OP', 'W_Central_Pump_kWh',
-               'W_Central_HP_kWh', 'OP_tot_HKW', 'OP_tot_BHKW', 'OP_tot_KKW',
-               'GWI_tot_KKW', 'GWI_tot_BHKW', 'GWI_tot_HKW', 'GWI_HKW', 'GWI_BHKW',
-               'GWI_KKW', 'GWI_Central_Pump', 'Q_tot_kWh', 'demand__Q_flow_nominal',
-               'demand__Q_flow_input', 'save_name']
+               'W_Central_HP_kWh', 'GWI_Central_Pump', 'Q_tot_kWh', 'demand__Q_flow_nominal',
+               'demand__Q_flow_input', 'save_name', 'demand__T_heat_supply', 'demand__heatDemand_max',
+               'demand__heat_input', 'supply__NetworkheatDemand_max', 'W_Central_Pump_kWh',
+               'W_Central_HP_kWh', 'W_Substation_kWh', 'GWI_tot', 'W_tot_waste_heat_kWh',
+               'GWI_tot_waste_heat', 'GWI_Boiler', 'GWI_GasCHP', 'GWI_CoalCHP', 'GWI_tot_Boiler',
+               'GWI_tot_GasCHP', 'GWI_tot_CoalCHP', 'GWI_Central_Pump', 'OP_tot', 'OP_tot_co2_high',
+               'OP_tot_waste_heat', 'OP_tot_waste_heat_co2_high', 'OP_tot_Boiler', 'OP_tot_GasCHP',
+               'OP_tot_CoalCHP', 'OP_tot_Boiler_co2_high', 'OP_tot_GasCHP_co2_high',
+               'OP_tot_CoalCHP_co2_high']
 
     changing_vars = [var for var in study_df_reduced.columns if var not in no_vars]
 
@@ -647,8 +743,10 @@ def reduce_df(input_df):
     return input_df_reduced
 
 
-def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, dir_models, resample_delta,
-                        start_date='2019-01-01', end_date='2020-01-01', savename_append='', save_figs=False):
+def plot_from_df_looped(res_dict, dir_output, var_lst, var_dict, y_label, plot_style, dir_models, resample_delta,
+                        figsize_plt, resample_style='mean', label_stype='short',
+                        start_date='2019-01-01', end_date='2020-01-01',
+                        savename_append='plot', save_figs=False, adjust_y_limits=False):
     """
     Creates a Matplotlib figure and plots the variables in 'var_lst'. Saves the figure in 'dir_output'
 
@@ -686,21 +784,22 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, dir_
                 sim_title_long += sim_title_x
             sim_title_short = study_df_reduced.at[sim_name, 'short_sim_name']
 
-            fig, ax = plt.subplots()
+            fig, ax = plt.subplots(figsize=figsize_plt)
             # fig.suptitle(sim_title_long, y=1.1, fontsize=10)
-            plt.title(sim_title_short, fontsize=12, y=1)
+            plt.title(sim_title_short, fontsize=11, y=1)
             lines = []
 
-            for var in var_lst:     # legend and line naming
-                if "Simple" in str(var):
-                    var_title = 'SimpleDistrict ' + ''.join(char for char in str(var) if char.isdigit())
-                elif 'pipe' in str(var):
-                    var_title = 'Pipe ' + ''.join(char for char in str(var) if char.isdigit())
-                else:
-                    var_title = str(var)
+            for var in var_lst:  # legend and line naming
 
-                line = ax.plot(res_dict[sim_name][var][start_date:end_date].resample(resample_delta).mean(),
-                               linewidth=0.7, label=var_title)
+                if resample_style == 'max':
+                    line = ax.plot(res_dict[sim_name][var][start_date:end_date].resample(resample_delta).max(),
+                                   linewidth=0.7, label=var_dict[var])
+                elif resample_style == 'mean':
+                    line = ax.plot(res_dict[sim_name][var][start_date:end_date].resample(resample_delta).mean(),
+                                   linewidth=0.7, label=var_dict[var])
+                else:
+                    raise Exception("Wrong Resample Style, choose mean or max")
+
                 lines += line
 
             ax.set_ylabel(y_label)
@@ -716,7 +815,11 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, dir_
             ax.xaxis.set_major_formatter(formatter)
 
             labs = [line.get_label() for line in lines]
-            ax.legend(lines, labs, loc="best", borderaxespad=0.2, ncol=1, fontsize=12)
+            ax.legend(lines, labs, loc="best", borderaxespad=0.2, ncol=1, fontsize=11)
+
+            if adjust_y_limits:
+                ymin, ymax = ax.get_ylim()
+                ax.set_ylim(ymin, ymax * 1.05)
 
             fig_lst.append(fig)
             plt.show()
@@ -731,17 +834,8 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, dir_
     elif plot_style == 'Single Variable':
         for var in var_lst:
 
-            fig, ax = plt.subplots()
-
-            # var_title = name of the variable
-            if "Simple" in str(var):
-                var_title = 'SimpleDistrict ' + ''.join(char for char in str(var) if char.isdigit())
-            elif 'pipe' in str(var):
-                var_title = 'Pipe ' + ''.join(char for char in str(var) if char.isdigit())
-            else:
-                var_title = str(var)
-
-            plt.title(var_title, fontsize=12, y=1)
+            fig, ax = plt.subplots(figsize=figsize_plt)
+            plt.title(var_dict[var], fontsize=11, y=1)
 
             # https://matplotlib.org/3.1.1/gallery/ticks_and_spines/date_concise_formatter.html
             locator = mdates.AutoDateLocator()
@@ -766,14 +860,22 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, dir_
                 line_label_short = study_df_reduced.at[sim_name, 'short_sim_name']
 
                 # if there a lot of Sims, use the short line label. Otherwise the Legend is too big.
-                if len(study_df_reduced) > 5:
+                if label_stype == 'short':
                     line_label = line_label_short
-                else:
+                elif label_stype == 'long':
                     line_label = line_label_long
+                else:
+                    raise Exception("wrong label style")
 
                 # resample:H: hourly, D: daily, S: seconds (f.e 600S)
-                line = ax.plot(res_dict[sim_name][var][start_date:end_date].resample(resample_delta).mean(),
-                               linewidth=0.7, label=line_label)
+                if resample_style == 'max':
+                    line = ax.plot(res_dict[sim_name][var][start_date:end_date].resample(resample_delta).max(),
+                                   linewidth=0.7, label=line_label)
+                elif resample_style == 'mean':
+                    line = ax.plot(res_dict[sim_name][var][start_date:end_date].resample(resample_delta).mean(),
+                                   linewidth=0.7, label=line_label)
+                else:
+                    raise Exception("Wrong Resample Style, choose mean or max")
                 lines += line
 
             ax.set_ylabel(y_label.replace("_", " "))
@@ -782,6 +884,10 @@ def plot_from_df_looped(res_dict, dir_output, var_lst, y_label, plot_style, dir_
             labs = [line.get_label() for line in lines]
             ax.legend(lines, labs, loc="best", borderaxespad=0.5, ncol=2, fontsize=10)
             # fig.autofmt_xdate(rotation=45, ha="center")
+
+            if adjust_y_limits:
+                ymin, ymax = ax.get_ylim()
+                ax.set_ylim(ymin, ymax * 1.05)
 
             fig_lst.append(fig)
             plt.show()
@@ -939,7 +1045,6 @@ def plot_from_df_looped_sns(res_dict, dir_output, var_lst, y_label, plot_style, 
 
 def compute_w_tot_df(dir_sciebo, dir_case, case):
     """
-    right now only works with one .mat file at a time!
 
     :param dir_sciebo:
     :param case:
@@ -962,6 +1067,10 @@ def compute_w_tot_df(dir_sciebo, dir_case, case):
 
         kpi_W_Central_HP_kWh = 'W_Central_HP_kWh'
         study_df[kpi_W_Central_HP_kWh] = 0
+        # if the central unit can be supplied by waste heat instead of electricity,
+        # the total electricity demand is reduced
+        kpi_W_tot_waste_heat_kWh = 'W_tot_waste_heat_kWh'
+        study_df[kpi_W_tot_waste_heat_kWh] = 0
 
         check_case(dir_models=dir_case, case=case)
 
@@ -970,26 +1079,26 @@ def compute_w_tot_df(dir_sciebo, dir_case, case):
         power_central_pump = make_sublist(case1_vars_lst, 'Supply.fan.P')
         power_substation = make_sublist(case1_vars_lst, end='heaPum.P_el.y')
         power_central_hp = make_sublist(case1_vars_lst, end='Supply.rev_hea_pum.P')
-        power_all = power_central_pump + power_substation + power_central_hp
 
-        # convert mat files to dataframes, takes long!
-        p_tot_dict = mat_files_filtered_to_dict(res_dir=dir_case, var_lst=power_all)
+        # convert mat files to dataframes, takes long for bigger variable lists!
         p_central_pump_dict = mat_files_filtered_to_dict(res_dir=dir_case, var_lst=power_central_pump)
         p_central_hp_dict = mat_files_filtered_to_dict(res_dir=dir_case, var_lst=power_central_hp)
         p_substations_hp_dict = mat_files_filtered_to_dict(res_dir=dir_case, var_lst=power_substation)
 
         # for each sim, compute the KPIs and write them to study.csv
         for sim_name in study_df.index:
-            w_tot_kWh = compute_w_tot_single_df(sim_dataframe=p_tot_dict[sim_name])
             w_central_pump_kWh = compute_w_tot_single_df(sim_dataframe=p_central_pump_dict[sim_name])
             w_central_hp_kWh = compute_w_tot_single_df(sim_dataframe=p_central_hp_dict[sim_name])
             w_substation_hp_kWh = compute_w_tot_single_df(sim_dataframe=p_substations_hp_dict[sim_name])
+            w_tot_waste_heat_kWh = w_central_pump_kWh + w_substation_hp_kWh
+            w_tot_kWh = w_central_pump_kWh + w_substation_hp_kWh + w_central_hp_kWh
 
             # write the KPI to the study_df
-            study_df.loc[[sim_name], [kpi_W_tot_kWh]] = int(w_tot_kWh)
             study_df.loc[[sim_name], [kpi_W_Central_Pump_kWh]] = int(w_central_pump_kWh)
             study_df.loc[[sim_name], [kpi_W_Central_HP_kWh]] = int(w_central_hp_kWh)
             study_df.loc[[sim_name], [kpi_w_substation_kWh]] = int(w_substation_hp_kWh)
+            study_df.loc[[sim_name], [kpi_W_tot_kWh]] = int(w_tot_kWh)
+            study_df.loc[[sim_name], [kpi_W_tot_waste_heat_kWh]] = int(w_tot_waste_heat_kWh)
             study_df.to_csv(dir_case / "study.csv")
 
     elif case == 'CaseBase':
@@ -1006,7 +1115,7 @@ def compute_w_tot_df(dir_sciebo, dir_case, case):
             w_central_pump_kWh = compute_w_tot_single_df(sim_dataframe=power_central_pump_dict[sim_name])
 
             # ----- individual chillers, not part of the simulation -----
-            x, cold_demand = import_demands_from_demgen(dir_sciebo, house_type='Old', output_interval=3600)  # Wh
+            x, cold_demand = import_demands_from_demgen(dir_sciebo, house_type='Standard', output_interval=3600)  # Wh
             total_cold_dem = sum(cold_demand) / 1000  # kWh
             cop_cc = 5
             w_tot_cc_kWh = total_cold_dem / cop_cc
@@ -1022,12 +1131,11 @@ def compute_w_tot_df(dir_sciebo, dir_case, case):
     else:
         raise Exception("wrong case")
 
-    return study_df[kpi_W_tot_kWh]  # kWh
+    return print("Electricity Consumption computed")
 
 
 def compute_q_tot_df(dir_case, case):
     """
-    right now olny works with one .mat file at a time!
 
     :param dir_case:
     :param case:
@@ -1124,85 +1232,86 @@ def compute_gwi_df(dir_case, case):
 
         kpi_gwi_tot = 'GWI_tot'
         study_df[kpi_gwi_tot] = 0
+        kpi_gwi_tot_waste_heat = 'GWI_tot_waste_heat'
+        study_df[kpi_gwi_tot_waste_heat] = 0
 
         # for each sim, compute the KPI and write it to study df reduced -> better normal study.csv?
         for sim_name in study_df.index:
             # get the total Electricity from the study.csv
             w_tot_kWh = study_df.at[sim_name, "W_tot_kWh"]
+            w_tot_waste_heat_kWh = study_df.at[sim_name, "W_tot_waste_heat_kWh"]
 
             k_co2 = 0.468  # kg co2 per kWh Strom https://www.umweltbundesamt.de/presse/pressemitteilungen/bilanz-2019-co2-emissionen-pro-kilowattstunde-strom
             gwi = w_tot_kWh * k_co2
+            gwi_waste_heat = w_tot_waste_heat_kWh * k_co2
 
             study_df.loc[[sim_name], [kpi_gwi_tot]] = int(gwi)
+            study_df.loc[[sim_name], [kpi_gwi_tot_waste_heat]] = int(gwi_waste_heat)
+
             study_df.to_csv(dir_case / "study.csv")
 
     elif case == 'CaseBase':
 
         check_case(dir_models=dir_case, case=case)
 
-        kpi_gwi_hkw = 'GWI_HKW'
-        study_df[kpi_gwi_hkw] = 0
-        kpi_gwi_bhkw = 'GWI_BHKW'
-        study_df[kpi_gwi_bhkw] = 0
-        kpi_gwi_kkw = 'GWI_KKW'
-        study_df[kpi_gwi_kkw] = 0
+        kpi_gwi_boiler = 'GWI_Boiler'
+        study_df[kpi_gwi_boiler] = 0
+        kpi_gwi_gas_chp = 'GWI_GasCHP'
+        study_df[kpi_gwi_gas_chp] = 0
+        kpi_gwi_coal_chp = 'GWI_CoalCHP'
+        study_df[kpi_gwi_coal_chp] = 0
 
-        kpi_gwi_tot_hkw = 'GWI_tot_HKW'
-        study_df[kpi_gwi_tot_hkw] = 0
-        kpi_gwi_tot_bhkw = 'GWI_tot_BHKW'
-        study_df[kpi_gwi_tot_bhkw] = 0
-        kpi_gwi_tot_kkw = 'GWI_tot_KKW'
-        study_df[kpi_gwi_tot_kkw] = 0
+        kpi_gwi_tot_boiler = 'GWI_tot_Boiler'
+        study_df[kpi_gwi_tot_boiler] = 0
+        kpi_gwi_tot_gas_chp = 'GWI_tot_GasCHP'
+        study_df[kpi_gwi_tot_gas_chp] = 0
+        kpi_gwi_tot_coal_chp = 'GWI_tot_CoalCHP'
+        study_df[kpi_gwi_tot_coal_chp] = 0
 
         kpi_gwi_central_pump = 'GWI_Central_Pump'
         study_df[kpi_gwi_central_pump] = 0
 
-        f_p_hkw = 1.3  # Fernwärme mit Heizwerken, keine gleichzeitige Produktion von Strom, Source: DIN V 18599-1
-        f_p_bhkw = 0.7  # Fernwärme mit KWK (Gud/CHP), Strom und Wärme, Source: DIN V 18599-1
-        f_p_kkw = 1.1  # ????? Todo: find source!
+        f_p_boiler = 1.3  # Fernwärme mit Heizwerken, keine gleichzeitige Produktion von Strom, Source: DIN V 18599-1
+        f_p_gas_chp = 0.7  # Fernwärme mit KWK (Gud/CHP), Strom und Wärme, Source: DIN V 18599-1
+        f_p_coal_chp = 1.3  #
 
         x_co2_coal = 0.43  # kg co2 per kWh Braunkohle, Source: DIN V 18599-1
         x_co2_gas = 0.24  # kg co2 per kWh Erdgas, Source: DIN V 18599-1
-
-        m_coal = 16 / 100  # Werte aus Vattenfall Berlin
-        m_gas = 1 - m_coal
-        x_co2_mix = x_co2_coal * m_coal + x_co2_gas * m_gas
-
         x_co2_elec = 0.468  # kg co2 per kWh Strom https://www.umweltbundesamt.de/presse/pressemitteilungen/bilanz-2019-co2-emissionen-pro-kilowattstunde-strom
 
         # for each sim, compute the KPIs and write them to study_df
         for sim_name in study_df.index:
             q_central_heater_kWh = study_df.at[sim_name, "Q_tot_kWh"]
 
-            gwi_central_heater_hkw_gas = q_central_heater_kWh * f_p_hkw * x_co2_gas
-            gwi_central_heater_bhkw_gas = q_central_heater_kWh * f_p_bhkw * x_co2_gas
-            gwi_central_heater_kkw_coal = q_central_heater_kWh * f_p_kkw * x_co2_coal
+            gwi_central_heater_boiler = q_central_heater_kWh * f_p_boiler * x_co2_gas
+            gwi_central_heater_gas_chp = q_central_heater_kWh * f_p_gas_chp * x_co2_gas
+            gwi_central_heater_coal_chp = q_central_heater_kWh * f_p_coal_chp * x_co2_coal
 
             w_tot_kWh = study_df.at[sim_name, "W_tot_kWh"]
             gwi_elec = w_tot_kWh * x_co2_elec
 
             # total GWI = Heater + Electricity
-            gwi_tot_hkw_gas = gwi_central_heater_hkw_gas + gwi_elec
-            gwi_tot_bhkw_gas = gwi_central_heater_bhkw_gas + gwi_elec
-            gwi_tot_kkw_coal = gwi_central_heater_kkw_coal + gwi_elec
+            gwi_tot_boiler = gwi_central_heater_boiler + gwi_elec
+            gwi_tot_gas_chp = gwi_central_heater_gas_chp + gwi_elec
+            gwi_tot_coal_chp = gwi_central_heater_coal_chp + gwi_elec
 
             # write all KPIs to the study_df
             study_df.loc[[sim_name], [kpi_gwi_central_pump]] = int(gwi_elec)
 
-            study_df.loc[[sim_name], [kpi_gwi_hkw]] = int(gwi_central_heater_hkw_gas)
-            study_df.loc[[sim_name], [kpi_gwi_bhkw]] = int(gwi_central_heater_bhkw_gas)
-            study_df.loc[[sim_name], [kpi_gwi_kkw]] = int(gwi_central_heater_kkw_coal)
+            study_df.loc[[sim_name], [kpi_gwi_boiler]] = int(gwi_central_heater_boiler)
+            study_df.loc[[sim_name], [kpi_gwi_gas_chp]] = int(gwi_central_heater_gas_chp)
+            study_df.loc[[sim_name], [kpi_gwi_coal_chp]] = int(gwi_central_heater_coal_chp)
 
-            study_df.loc[[sim_name], [kpi_gwi_tot_hkw]] = int(gwi_tot_hkw_gas)
-            study_df.loc[[sim_name], [kpi_gwi_tot_bhkw]] = int(gwi_tot_bhkw_gas)
-            study_df.loc[[sim_name], [kpi_gwi_tot_kkw]] = int(gwi_tot_kkw_coal)
+            study_df.loc[[sim_name], [kpi_gwi_tot_boiler]] = int(gwi_tot_boiler)
+            study_df.loc[[sim_name], [kpi_gwi_tot_gas_chp]] = int(gwi_tot_gas_chp)
+            study_df.loc[[sim_name], [kpi_gwi_tot_coal_chp]] = int(gwi_tot_coal_chp)
 
             study_df.to_csv(dir_case / "study.csv")
 
     else:
         raise Exception("wrong case")
 
-    return study_df
+    return print("Global Warming Impact (GWI) computed")
 
 
 def compute_op_df(dir_case, case):
@@ -1222,41 +1331,70 @@ def compute_op_df(dir_case, case):
 
         check_case(dir_models=dir_case, case=case)
 
-        kpi_name = 'OP'
-        study_df[kpi_name] = 0
+        kpi_op_tot = 'OP_tot'
+        study_df[kpi_op_tot] = 0
+        kpi_op_tot_co2_high = 'OP_tot_co2_high'  # operational costs with high CO2 price
+        study_df[kpi_op_tot_co2_high] = 0
+        kpi_op_tot_waste_heat = 'OP_tot_waste_heat'
+        study_df[kpi_op_tot_waste_heat] = 0
+        kpi_op_tot_waste_heat_co2_high = 'OP_tot_waste_heat_co2_high'
+        study_df[kpi_op_tot_waste_heat_co2_high] = 0
 
         # for each sim, compute the KPI and write it to study.csv
         for sim_name in study_df.index:
             # get the total Electricity from the study.csv
             w_tot_kWh = study_df.at[sim_name, "W_tot_kWh"]
+            w_tot_waste_heat_kWh = study_df.at[sim_name, "W_tot_waste_heat_kWh"]
+
             price_w_tot = 0.25  # € per kWh Strom
+
             op_w_tot = w_tot_kWh * price_w_tot
+            op_w_tot_waste_heat = w_tot_waste_heat_kWh * price_w_tot
 
             # get the total Electricity from the study.csv
             gwi = study_df.at[sim_name, "GWI_tot"]
-            price_gwi = 0.03  # 30€ per Ton -> 0,3€ per kg CO2
-            op_gwi = gwi * price_gwi
+            gwi_waste_heat = study_df.at[sim_name, "GWI_tot_waste_heat"]
 
-            op = op_gwi + op_w_tot
+            price_gwi = 0.03  # 30€ per Ton -> 0,3€ per kg CO2
+            price_gwi_high = 0.18  # 180€ per Ton -> 0.18€ per kg CO2
+
+            op_gwi = gwi * price_gwi
+            op_gwi_high = gwi * price_gwi_high
+            op_waste_heat_gwi = gwi_waste_heat * price_gwi
+            op_waste_heat_gwi_high = gwi_waste_heat * price_gwi_high
+
+            op_tot = op_gwi + op_w_tot
+            op_tot_co2_high = op_gwi_high + op_w_tot
+            op_tot_waste_heat = op_waste_heat_gwi + op_w_tot_waste_heat
+            op_tot_waste_heat_co2_high = op_waste_heat_gwi_high + op_w_tot_waste_heat
 
             # write the KPI to the study_df
-            study_df.loc[[sim_name], [kpi_name]] = int(op)
+            study_df.loc[[sim_name], [kpi_op_tot]] = int(op_tot)
+            study_df.loc[[sim_name], [kpi_op_tot_co2_high]] = int(op_tot_co2_high)
+            study_df.loc[[sim_name], [kpi_op_tot_waste_heat]] = int(op_tot_waste_heat)
+            study_df.loc[[sim_name], [kpi_op_tot_waste_heat_co2_high]] = int(op_tot_waste_heat_co2_high)
             study_df.to_csv(dir_case / "study.csv")
 
     elif case == 'CaseBase':
 
         check_case(dir_models=dir_case, case=case)
 
-        kpi_OP_tot_HKW = 'OP_tot_HKW'
-        study_df[kpi_OP_tot_HKW] = 0
-        kpi_OP_tot_BHKW = 'OP_tot_BHKW'
-        study_df[kpi_OP_tot_BHKW] = 0
-        kpi_OP_tot_KKW = 'OP_tot_KKW'
-        study_df[kpi_OP_tot_KKW] = 0
+        kpi_OP_tot_Boiler = 'OP_tot_Boiler'
+        study_df[kpi_OP_tot_Boiler] = 0
+        kpi_OP_tot_GasCHP = 'OP_tot_GasCHP'
+        study_df[kpi_OP_tot_GasCHP] = 0
+        kpi_OP_tot_CoalCHP = 'OP_tot_CoalCHP'
+        study_df[kpi_OP_tot_CoalCHP] = 0
 
-        f_p_hkw = 1.3  # Fernwärme mit Heizwerken, keine gleichzeitige Produktion von Strom, Source: DIN V 18599-1
-        f_p_bhkw = 0.7  # Fernwärme mit KWK (Gud/CHP), Strom und Wärme, Source: DIN V 18599-1
-        f_p_kkw = 1.3  #
+        kpi_OP_tot_Boiler_co2_high = 'OP_tot_Boiler_co2_high'
+        study_df[kpi_OP_tot_Boiler_co2_high] = 0
+        kpi_OP_tot_GasCHP_co2_high = 'OP_tot_GasCHP_co2_high'
+        study_df[kpi_OP_tot_GasCHP_co2_high] = 0
+        kpi_OP_tot_CoalCHP_co2_high = 'OP_tot_CoalCHP_co2_high'
+        study_df[kpi_OP_tot_CoalCHP_co2_high] = 0
+
+        f_p_boiler = 1.3  # Fernwärme mit Heizwerken, keine gleichzeitige Produktion von Strom, Source: DIN V 18599-1
+        f_p_chp = 0.7  # Fernwärme mit KWK (Gud/CHP), Strom und Wärme, Source: DIN V 18599-1
 
         c_gas = 0.02  # Gasprice in € per kWh Gas, Source: BDEW https://www.bdew.de/media/documents/201013_BDEW-Gaspreisanalyse_Juli_2020.pdf
 
@@ -1272,9 +1410,9 @@ def compute_op_df(dir_case, case):
             # get total Heat from the study.csv
             q_central_heater_kWh = study_df.at[sim_name, "Q_tot_kWh"]
 
-            op_central_heater_hkw_gas = q_central_heater_kWh * f_p_hkw * c_gas
-            op_central_heater_bhkw_gas = q_central_heater_kWh * f_p_bhkw * c_gas
-            op_central_heater_kkw_coal = q_central_heater_kWh * f_p_kkw * c_coal
+            op_central_heater_boiler_gas = q_central_heater_kWh * f_p_boiler * c_gas
+            op_central_heater_chp_gas = q_central_heater_kWh * f_p_chp * c_gas
+            op_central_heater_chp_coal = q_central_heater_kWh * f_p_chp * c_coal
 
             # get the total Electricity from the study.csv
             w_tot_kWh = study_df.at[sim_name, "W_tot_kWh"]
@@ -1282,30 +1420,44 @@ def compute_op_df(dir_case, case):
             op_w_tot = w_tot_kWh * price_w_tot
 
             # get the GWIs from the study.csv
-            gwi_tot_hkw = study_df.at[sim_name, "GWI_tot_HKW"]
-            gwi_tot_bhkw = study_df.at[sim_name, "GWI_tot_BHKW"]
-            gwi_tot_kkw = study_df.at[sim_name, "GWI_tot_KKW"]
+            gwi_tot_boiler = study_df.at[sim_name, "GWI_tot_Boiler"]
+            gwi_tot_gas_chp = study_df.at[sim_name, "GWI_tot_GasCHP"]
+            gwi_tot_coal_chp = study_df.at[sim_name, "GWI_tot_CoalCHP"]
 
             price_gwi = 0.03  # 30€ per Ton -> 0,3€ per kg CO2
-            op_gwi_hkw = gwi_tot_hkw * price_gwi
-            op_gwi_bhkw = gwi_tot_bhkw * price_gwi
-            op_gwi_kkw = gwi_tot_kkw * price_gwi
+            price_gwi_high = 0.18  # 180€ per Ton -> 0.18€ per kg CO2
 
-            # Total Operational Costs
-            op_tot_hkw = op_central_heater_hkw_gas + op_gwi_hkw + op_w_tot
-            op_tot_bhkw = op_central_heater_bhkw_gas + op_gwi_bhkw + op_w_tot
-            op_tot_kkw = op_central_heater_kkw_coal + op_gwi_kkw + op_w_tot
+            # compute costs of the GWI
+            op_gwi_boiler = gwi_tot_boiler * price_gwi
+            op_gwi_gas_chp = gwi_tot_gas_chp * price_gwi
+            op_gwi_coal_chp = gwi_tot_coal_chp * price_gwi
+
+            op_gwi_boiler_co2_high = gwi_tot_boiler * price_gwi_high
+            op_gwi_gas_chp_co2_high = gwi_tot_gas_chp * price_gwi_high
+            op_gwi_coal_chp_co2_high = gwi_tot_coal_chp * price_gwi_high
+
+            # Total Operational Costs = Fuel Costs + CO2 Costs + Electricity Costs
+            op_tot_boiler = op_central_heater_boiler_gas + op_gwi_boiler + op_w_tot
+            op_tot_gas_chp = op_central_heater_chp_gas + op_gwi_gas_chp + op_w_tot
+            op_tot_coal_chp = op_central_heater_chp_coal + op_gwi_coal_chp + op_w_tot
+
+            op_tot_boiler_co2_high = op_central_heater_boiler_gas + op_gwi_boiler_co2_high + op_w_tot
+            op_tot_gas_chp_co2_high = op_central_heater_chp_gas + op_gwi_gas_chp_co2_high + op_w_tot
+            op_tot_coal_chp_co2_high = op_central_heater_chp_coal + op_gwi_coal_chp_co2_high + op_w_tot
 
             # write the KPI to the study_df
-            study_df.loc[[sim_name], [kpi_OP_tot_HKW]] = int(op_tot_hkw)
-            study_df.loc[[sim_name], [kpi_OP_tot_BHKW]] = int(op_tot_bhkw)
-            study_df.loc[[sim_name], [kpi_OP_tot_KKW]] = int(op_tot_kkw)
+            study_df.loc[[sim_name], [kpi_OP_tot_Boiler]] = int(op_tot_boiler)
+            study_df.loc[[sim_name], [kpi_OP_tot_Boiler_co2_high]] = int(op_tot_boiler_co2_high)
+            study_df.loc[[sim_name], [kpi_OP_tot_GasCHP]] = int(op_tot_gas_chp)
+            study_df.loc[[sim_name], [kpi_OP_tot_GasCHP_co2_high]] = int(op_tot_gas_chp_co2_high)
+            study_df.loc[[sim_name], [kpi_OP_tot_CoalCHP]] = int(op_tot_coal_chp)
+            study_df.loc[[sim_name], [kpi_OP_tot_CoalCHP_co2_high]] = int(op_tot_coal_chp_co2_high)
             study_df.to_csv(dir_case / "study.csv")
 
     else:
         raise Exception("wrong case")
 
-    return study_df  # kWh
+    return print("Operational Costs (OP) computed")  # kWh
 
 
 def compute_all_KPIs(dir_sciebo, dir_models, case):
@@ -1360,6 +1512,344 @@ def compute_w_tot_single_df(sim_dataframe):
     w_tot_kWh = sum(w_vars_kWh)
 
     return w_tot_kWh
+
+
+def plot_kpis():
+    if platform.system() == 'Darwin':
+        dir_sciebo = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data"
+        dir_micha = "/Users/jonasgrossmann/sciebo/MA_Jonas"
+        dir_home = "/Users/jonasgrossmann"
+    elif platform.system() == 'Windows':
+        dir_sciebo = "D:/mma-jgr/sciebo-folder/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data"
+        dir_micha = "D:/mma-jgr/sciebo-folder/MA_Jonas"
+        dir_home = "D:/mma-jgr"
+    else:
+        raise Exception("Unknown operating system")
+
+    dir_output = dir_sciebo + "/plots"
+
+    dir_caseBC = dir_micha + "/final_models/Case_BC"
+    dir_case1A = dir_micha + "/final_models/case_1A"
+    dir_case1B = dir_micha + "/final_models/case_1B"
+    dir_case1C = dir_micha + "/final_models/case_1C"
+    dir_case2 = dir_micha + '/final_models/case_2'
+
+    study_df_caseBC = pd.read_csv(dir_caseBC + "/study.csv", index_col=0)
+    study_df_case1A = pd.read_csv(dir_case1A + "/study.csv", index_col=0)
+    study_df_case1B = pd.read_csv(dir_case1B + "/study.csv", index_col=0)
+    study_df_case1C = pd.read_csv(dir_case1C + "/study.csv", index_col=0)
+    study_df_case2 = pd.read_csv(dir_case2 + "/study.csv", index_col=0)
+
+    study_df_lst = [study_df_caseBC, study_df_case1A, study_df_case1B, study_df_case1C, study_df_case2]
+
+    for study_df_i in study_df_lst:
+        incomplete_sims = study_df_i[study_df_i['simulated'] == False].index
+        study_df_i.drop(incomplete_sims, inplace=True)
+
+    # make two dataframes that store each KPI_tot as a new row
+    kpi_cols = {'KPI_Value': [], 'KPI_Name': [], 'KPI_Type': [], 'Case': []}
+    kpi_df = pd.DataFrame(kpi_cols)
+
+    # reference case
+    for (columnName, columnData) in study_df_caseBC.iteritems():
+        if 'OP_tot' in columnName:
+            for columnEntry in columnData.values:
+                new_row = {'KPI_Value': columnEntry, 'Case': 'Ref', 'KPI_Name': columnName,
+                           'KPI_Type': 'OP'}
+                kpi_df = kpi_df.append(new_row, ignore_index=True)
+
+        elif 'GWI_tot' in columnName:
+            for columnEntry in columnData.values:
+                new_row = {'KPI_Value': columnEntry, 'Case': 'Ref', 'KPI_Name': columnName,
+                           'KPI_Type': 'GWI'}
+                kpi_df = kpi_df.append(new_row, ignore_index=True)
+
+    # case 1a
+    for (columnName, columnData) in study_df_case1A.iteritems():
+        if 'OP_tot' in columnName:
+            for columnEntry in columnData.values:
+                new_row = {'KPI_Value': columnEntry, 'Case': '1A', 'KPI_Name': columnName,
+                           'KPI_Type': 'OP'}
+                kpi_df = kpi_df.append(new_row, ignore_index=True)
+
+        elif 'GWI_tot' in columnName:
+            for columnEntry in columnData.values:
+                new_row = {'KPI_Value': columnEntry, 'Case': '1A', 'KPI_Name': columnName,
+                           'KPI_Type': 'GWI'}
+                kpi_df = kpi_df.append(new_row, ignore_index=True)
+
+    # case 1b
+    for (columnName, columnData) in study_df_case1B.iteritems():
+        if 'OP_tot' in columnName:
+            for columnEntry in columnData.values:
+                new_row = {'KPI_Value': columnEntry, 'Case': '1B', 'KPI_Name': columnName,
+                           'KPI_Type': 'OP'}
+                kpi_df = kpi_df.append(new_row, ignore_index=True)
+
+        elif 'GWI_tot' in columnName:
+            for columnEntry in columnData.values:
+                new_row = {'KPI_Value': columnEntry, 'Case': '1B', 'KPI_Name': columnName,
+                           'KPI_Type': 'GWI'}
+                kpi_df = kpi_df.append(new_row, ignore_index=True)
+
+    # case 1c
+    for (columnName, columnData) in study_df_case1C.iteritems():
+        if 'OP_tot' in columnName:
+            for columnEntry in columnData.values:
+                new_row = {'KPI_Value': columnEntry, 'Case': '1C', 'KPI_Name': columnName,
+                           'KPI_Type': 'OP'}
+                kpi_df = kpi_df.append(new_row, ignore_index=True)
+
+        elif 'GWI_tot' in columnName:
+            for columnEntry in columnData.values:
+                new_row = {'KPI_Value': columnEntry, 'Case': '1C', 'KPI_Name': columnName,
+                           'KPI_Type': 'GWI'}
+                kpi_df = kpi_df.append(new_row, ignore_index=True)
+
+    # case 2
+    for (columnName, columnData) in study_df_case2.iteritems():
+        if 'OP_tot' in columnName:
+            for columnEntry in columnData.values:
+                new_row = {'KPI_Value': columnEntry, 'Case': '2', 'KPI_Name': columnName,
+                           'KPI_Type': 'OP'}
+                kpi_df = kpi_df.append(new_row, ignore_index=True)
+
+        elif 'GWI_tot' in columnName:
+            for columnEntry in columnData.values:
+                new_row = {'KPI_Value': columnEntry, 'Case': '2', 'KPI_Name': columnName,
+                           'KPI_Type': 'GWI'}
+                kpi_df = kpi_df.append(new_row, ignore_index=True)
+
+    gwi_df = kpi_df.loc[kpi_df['KPI_Type'] == 'GWI']
+    op_df = kpi_df.loc[kpi_df['KPI_Type'] == 'OP']
+
+    plot_barplot = False
+    if plot_barplot:
+        ax = sns.boxplot(x="Case", y="KPI_Value", data=gwi_df)
+        ax = sns.swarmplot(x="Case", y="KPI_Value", data=gwi_df, color=".25")
+        ax.set(ylabel='GWI')
+        plt.show()
+
+    plot_violin = False
+    if plot_violin:
+        g = sns.catplot(x="Case", y="KPI_Value", hue='KPI_Type', kind="violin", inner=None, data=kpi_df)
+        sns.swarmplot(x="Case", y="KPI_Value", hue='KPI_Type', color="k", size=3, data=kpi_df, ax=g.ax)
+        plt.show()
+
+    plot_with_2_axes = True
+    if plot_with_2_axes:
+        rwth_blue = "#00549F"
+        rwth_orange = "#F6A800"
+        rwth_colors_all = [rwth_blue, rwth_orange]
+
+        plt.style.use(dir_home + "/git_repos/matplolib-style/ebc.paper.mplstyle")
+        sns.set()
+        sns.set_style("white")
+        sns.set_context("paper")
+
+        sns.set_palette(sns.color_palette(rwth_colors_all))
+
+        # https://stackoverflow.com/questions/50316180/seaborn-time-series-boxplot-using-hue-and-different-scale-axes
+
+        gwi_tmp_df = kpi_df.copy()
+        gwi_tmp_df.loc[gwi_tmp_df['KPI_Type'] != 'GWI', 'KPI_Value'] = np.nan
+
+        op_tmp_df = kpi_df.copy()
+        op_tmp_df.loc[op_tmp_df['KPI_Type'] != 'OP', 'KPI_Value'] = np.nan
+
+        fig, ax = plt.subplots(figsize=figsize)
+        ax = sns.boxplot(ax=ax, x='Case', y='KPI_Value', hue='KPI_Type', data=gwi_tmp_df)
+        ax = sns.swarmplot(ax=ax, x="Case", y="KPI_Value", hue='KPI_Type', data=gwi_tmp_df,
+                           dodge=True, color=".25", size=3)
+        ax.set(ylabel='GWI in kg CO2')
+        ax.set(xlabel='')
+        ax.set_ylim(bottom=0)
+        ax.get_legend().remove()
+
+        ax2 = ax.twinx()
+        ax2 = sns.boxplot(ax=ax2, x='Case', y='KPI_Value', hue='KPI_Type', data=op_tmp_df)
+        ax2 = sns.swarmplot(ax=ax2, x="Case", y="KPI_Value", hue='KPI_Type', data=op_tmp_df,
+                            dodge=True, color=".25", size=3)
+        ax2.set(ylabel='OP in €')
+        ax2.set(xlabel='')
+        ax2.set_ylim(bottom=0)
+        ax2.get_legend().remove()
+
+        handles, labels = ax.get_legend_handles_labels()
+        l = plt.legend(handles[0:2], labels[0:2], loc=1)
+
+        plt.show()
+
+        save_path = os.path.join(dir_output + "/KPIs_OP_GWI_Barplots")
+        fig.savefig(save_path + ".pdf")
+        fig.savefig((save_path + ".png"), dpi=600)
+
+    plot_case_1C = False
+    if plot_case_1C:
+        rwth_blue = "#00549F"
+        rwth_orange = "#F6A800"
+        rwth_colors_all = [rwth_blue, rwth_orange]
+
+        plt.style.use(dir_home + "/git_repos/matplolib-style/ebc.paper.mplstyle")
+        sns.set()
+        sns.set_style("white")
+        sns.set_context("paper")
+
+        sns.set_palette(sns.color_palette(rwth_colors_all))
+
+        # https://stackoverflow.com/questions/50316180/seaborn-time-series-boxplot-using-hue-and-different-scale-axes
+
+        kpi_case_1C_df = kpi_df.loc[kpi_df['Case'] == '1C']
+        kpi_case_1C_df = kpi_case_1C_df.loc[kpi_df['KPI_Type'] == 'OP']
+
+        fig, ax = plt.subplots(figsize=figsize)
+        # ax = sns.boxplot(ax=ax, x='KPI_Name', y='KPI_Value', hue='KPI_Type', data=kpi_case_1C_df)
+        ax = sns.swarmplot(ax=ax, x="KPI_Name", y="KPI_Value", hue='KPI_Type', data=kpi_case_1C_df,
+                           dodge=True, size=5)
+        ax.set(ylabel='OP in €')
+        ax.set(xlabel='')
+        x_tick_labels = ['$OP_{tot}$', '$OP_{tot,2°C}$', '$OP_{tot,WH}$', '$OP_{tot,WH,2°C}$']
+        ax.set_xticklabels(x_tick_labels)
+        ax.get_legend().remove()
+
+        # handles, labels = ax.get_legend_handles_labels()
+        # l = plt.legend(handles[0:2], labels[0:2], loc=1)
+
+        plt.show()
+
+        save_path = os.path.join(dir_output + "/KPIs_OP_GWI_Barplots")
+        fig.savefig(save_path + ".pdf")
+        fig.savefig((save_path + ".png"), dpi=600)
+
+    return ''
+
+
+def plot_kpis_1A_1C():
+    if platform.system() == 'Darwin':
+        dir_sciebo = "/Users/jonasgrossmann/sciebo/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data"
+        dir_micha = "/Users/jonasgrossmann/sciebo/MA_Jonas"
+        dir_home = "/Users/jonasgrossmann"
+    elif platform.system() == 'Windows':
+        dir_sciebo = "D:/mma-jgr/sciebo-folder/RWTH_Dokumente/MA_Masterarbeit_RWTH/Data"
+        dir_micha = "D:/mma-jgr/sciebo-folder/MA_Jonas"
+        dir_home = "D:/mma-jgr"
+    else:
+        raise Exception("Unknown operating system")
+
+    dir_output = dir_sciebo + "/plots"
+
+    dir_case1A = dir_micha + "/final_models/case_1A"
+    dir_case1C = dir_micha + "/final_models/case_1C"
+    dir_case2 = dir_micha + '/final_models/case_2'
+
+    study_df_case1A = pd.read_csv(dir_case1A + "/study.csv", index_col=0)
+    study_df_case1C = pd.read_csv(dir_case1C + "/study.csv", index_col=0)
+    study_df_case2 = pd.read_csv(dir_case2 + "/study.csv", index_col=0)
+
+    study_df_lst = [study_df_case1A, study_df_case1C, study_df_case2]
+
+    for study_df_i in study_df_lst:
+        incomplete_sims = study_df_i[study_df_i['simulated'] == False].index
+        study_df_i.drop(incomplete_sims, inplace=True)
+
+    # make two dataframes that store each KPI_tot as a new row
+    kpi_cols = {'KPI_Value': [], 'KPI_Name': [], 'KPI_Type': [], 'Case': []}
+    kpi_df = pd.DataFrame(kpi_cols)
+
+    # case 1a
+    for (columnName, columnData) in study_df_case1A.iteritems():
+        if 'OP_tot' in columnName and not 'co2_high' in columnName:
+            for columnEntry in columnData.values:
+                new_row = {'KPI_Value': columnEntry, 'Case': '1A', 'KPI_Name': columnName,
+                           'KPI_Type': 'OP'}
+                kpi_df = kpi_df.append(new_row, ignore_index=True)
+
+        elif 'GWI_tot' in columnName:
+            for columnEntry in columnData.values:
+                new_row = {'KPI_Value': columnEntry, 'Case': '1A', 'KPI_Name': columnName,
+                           'KPI_Type': 'GWI'}
+                kpi_df = kpi_df.append(new_row, ignore_index=True)
+
+    # case 1c
+    for (columnName, columnData) in study_df_case1C.iteritems():
+        if 'OP_tot' in columnName and not 'co2_high' in columnName:
+            for columnEntry in columnData.values:
+                new_row = {'KPI_Value': columnEntry, 'Case': '1C', 'KPI_Name': columnName,
+                           'KPI_Type': 'OP'}
+                kpi_df = kpi_df.append(new_row, ignore_index=True)
+
+        elif 'GWI_tot' in columnName:
+            for columnEntry in columnData.values:
+                new_row = {'KPI_Value': columnEntry, 'Case': '1C', 'KPI_Name': columnName,
+                           'KPI_Type': 'GWI'}
+                kpi_df = kpi_df.append(new_row, ignore_index=True)
+
+    # case 2
+    for (columnName, columnData) in study_df_case2.iteritems():
+        if 'OP_tot' in columnName and not 'co2_high' in columnName:
+            for columnEntry in columnData.values:
+                new_row = {'KPI_Value': columnEntry, 'Case': '2', 'KPI_Name': columnName,
+                           'KPI_Type': 'OP'}
+                kpi_df = kpi_df.append(new_row, ignore_index=True)
+
+        elif 'GWI_tot' in columnName:
+            for columnEntry in columnData.values:
+                new_row = {'KPI_Value': columnEntry, 'Case': '2', 'KPI_Name': columnName,
+                           'KPI_Type': 'GWI'}
+                kpi_df = kpi_df.append(new_row, ignore_index=True)
+
+    gwi_df = kpi_df.loc[kpi_df['KPI_Type'] == 'GWI']
+    op_df = kpi_df.loc[kpi_df['KPI_Type'] == 'OP']
+
+    plot_with_2_axes = True
+    if plot_with_2_axes:
+        rwth_blue = "#00549F"
+        rwth_orange = "#F6A800"
+        rwth_colors_all = [rwth_blue, rwth_orange]
+
+        plt.style.use(dir_home + "/git_repos/matplolib-style/ebc.paper.mplstyle")
+        sns.set()
+        sns.set_style("white")
+        sns.set_context("paper")
+
+        sns.set_palette(sns.color_palette(rwth_colors_all))
+
+        # https://stackoverflow.com/questions/50316180/seaborn-time-series-boxplot-using-hue-and-different-scale-axes
+
+        gwi_tmp_df = kpi_df.copy()
+        gwi_tmp_df.loc[gwi_tmp_df['KPI_Type'] != 'GWI', 'KPI_Value'] = np.nan
+
+        op_tmp_df = kpi_df.copy()
+        op_tmp_df.loc[op_tmp_df['KPI_Type'] != 'OP', 'KPI_Value'] = np.nan
+
+        fig, ax = plt.subplots(figsize=figsize)
+        ax = sns.boxplot(ax=ax, x='Case', y='KPI_Value', hue='KPI_Type', data=gwi_tmp_df)
+        ax = sns.swarmplot(ax=ax, x="Case", y="KPI_Value", hue='KPI_Type', data=gwi_tmp_df,
+                           dodge=True, color=".25", size=3)
+        ax.set(ylabel='GWI in kg CO2')
+        ax.set(xlabel='')
+        ax.set_ylim(bottom=0)
+        ax.get_legend().remove()
+
+        ax2 = ax.twinx()
+        ax2 = sns.boxplot(ax=ax2, x='Case', y='KPI_Value', hue='KPI_Type', data=op_tmp_df)
+        ax2 = sns.swarmplot(ax=ax2, x="Case", y="KPI_Value", hue='KPI_Type', data=op_tmp_df,
+                            dodge=True, color=".25", size=3)
+        ax2.set(ylabel='OP in €')
+        ax2.set(xlabel='')
+        ax2.set_ylim(bottom=0)
+        ax2.get_legend().remove()
+
+        handles, labels = ax.get_legend_handles_labels()
+        l = plt.legend(handles[0:2], labels[0:2], loc=1)
+
+        plt.show()
+
+        save_path = os.path.join(dir_output + "/KPIs_OP_GWI_Barplots_1A_1C_2")
+        fig.savefig(save_path + ".pdf")
+        fig.savefig((save_path + ".png"), dpi=600)
+
+    return ''
 
 
 # unused function
