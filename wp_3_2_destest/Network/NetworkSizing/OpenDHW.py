@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 import numpy as np
+import pandas as pd
 import os
 import matplotlib.pyplot as plt
 import seaborn as sns
-import pathlib
 from pathlib import Path
 import xlrd
 import math
 import random
+import matplotlib.dates as mdates
 
 import pycity_base.classes.demand.domestic_hot_water as dhw
 import pycity_base.classes.timer as time
@@ -19,13 +20,123 @@ import pycity_base.classes.demand.occupancy as occ
 
 def main():
 
-    generate_dhw_profile_like_pycity()
+    # generate_dhw_profile_like_pycity()
+    import_from_dhwcalc()
+
+    pass
 
 
-def generate_dhw_profile_like_pycity(initial_day=0, current_occupancy=5,
-                                     temp_dT=35, plot_demand=True,
-                                     save_fig=False):
+def import_from_dhwcalc(s_step=60, delta_t_dhw=35,
+                        plot_demand=True, start_in_summer=False,
+                        plot_demand_seaborn=True, save_fig=True):
     """
+    DHWcalc yields Volume Flow TimeSeries (in Liters per hour). To get
+    Energyflows -> Q = Vdot * rho * cp * dT
+
+    :return: dhw_demand:    time series. each timestep contains the Energyflow
+                            in Watt -> W
+    """
+
+    if s_step == 60:
+        dhw_file = "DHWcalc_200L_1min_1cat_step_functions_DHW.txt"
+    elif s_step == 600:
+        dhw_file = "DHWcalc_200L_10min_1cat_step_functions_DHW.txt"
+    else:
+        raise Exception("Unkown Time Step for DHWcalc")
+
+    dhw_profile = Path.cwd() / dhw_file
+    dir_output = Path.cwd() / "plots"
+    dir_output.mkdir(exist_ok=True)
+
+    water_LperH = [int(word.strip('\n')) for word in
+                   open(dhw_profile).readlines()]  # L/h each step
+    water_LperSec = [x / 3600 for x in water_LperH]
+
+    rho = 1  # 1L = 1kg for Water
+    cp = 4180  # J/kgK
+    dhw_demand = [i * rho * cp * delta_t_dhw for i in water_LperSec]  # in W
+
+    yearly_dhw_demand = sum(dhw_demand) * s_step / (3600 * 1000)  # in kWh
+    max_dhw_heat_flow = max(dhw_demand) / 1000  # in kW
+    print("Yearly DHW energy demand from DHWcalc is {:.2f} kWh"
+          " with an average of {:.2f} kW".format(yearly_dhw_demand,
+                                                 max_dhw_heat_flow))
+
+    if plot_demand:
+
+        sns.set_style("white")
+        sns.set_context("paper")
+
+        fig, ax = plt.subplots()
+        ax.plot(dhw_demand, linewidth=0.7, label="DHW Demand in Watt")
+        plt.ylabel('DHW demand in Watt')
+        plt.xlabel('Minutes in a Year')
+        plt.title('Total Energy: {:.2f} kWh with a peak of {:.2f} kW'.format(
+            yearly_dhw_demand, max_dhw_heat_flow))
+        plt.show()
+        if save_fig:
+            fig.savefig(dir_output / "DHW_Demand.pdf")
+
+    if plot_demand_seaborn:
+
+        # RWTH colours
+        rwth_blue = "#00549F"
+        # rwth_red = "#CC071E"
+
+        sns.set_style("white")
+        sns.set_context("paper")
+
+        # set date range to simplify plot slicing
+        date_range = pd.date_range(start='2019-01-01', end='2020-01-01',
+                                   freq=str(s_step) + 'S')
+        date_range = date_range[:-1]
+
+        # convert demands to kW for plotting
+        dhw_demand = [dem_step / 1000 for dem_step in dhw_demand]
+
+        # make dataframe for plotting with seaborn
+        dhw_demand_df = pd.DataFrame({'DHW Demand': dhw_demand},
+                                     index=date_range)
+
+        fig, ax = plt.subplots()
+        ax_data = dhw_demand_df[['DHW Demand']]
+        ax = sns.lineplot(data=ax_data, linewidth=0.7, dashes=False,
+                          palette=[rwth_blue])
+        ax.legend_.remove()
+
+        # set the x axis ticks
+        # https://matplotlib.org/3.1.1/gallery/ticks_and_spines/date_concise_formatter.html
+        locator = mdates.AutoDateLocator()
+        formatter = mdates.ConciseDateFormatter(locator)
+        formatter.formats = ['%y', '%b', '%d', '%H:%M', '%H:%M', '%S.%f', ]
+        formatter.zero_formats = [''] + formatter.formats[:-1]
+        formatter.zero_formats[3] = '%d-%b'
+        formatter.offset_formats = ['', '%Y', '%b %Y', '%d %b %Y', '%d %b %Y',
+                                    '%d %b %Y %H:%M', ]
+        ax.xaxis.set_major_locator(locator)
+        ax.xaxis.set_major_formatter(formatter)
+
+        plt.ylabel('DHW demand in kW')
+
+        plt.show()
+        if save_fig:
+            fig.savefig(dir_output / "DHW_Demand_sns.pdf")
+
+    if start_in_summer:
+        half = int((len(
+            dhw_demand) - 1) / 2)  # half the length of the demand timeseries
+        dhw_demand = dhw_demand[half:] + dhw_demand[
+                                         :half]  # shift demand by half a year
+
+    return dhw_demand  # in W
+
+
+def generate_dhw_profile_like_pycity(s_step=60, initial_day=0,
+                                     current_occupancy=5, temp_dT=35,
+                                     plot_demand=True, save_fig=False):
+    """
+    :param: s_step: int:        seconds within a time step. F.e. should be
+                                60s for pycity.
     :param: initial_day:        0: Mon, 1: Tue, 2: Wed, 3: Thur,
                                 4: Fri, 5 : Sat, 6 : Sun
     :param: current_occuapncy:  number of people in the house. In PyCity,
@@ -59,7 +170,7 @@ def generate_dhw_profile_like_pycity(initial_day=0, current_occupancy=5,
 
         # Store values in dictionary
         if sheetname in ("wd_mw", "we_mw"):
-            profiles[sheetname] = values    # minute-wise average profile L/h
+            profiles[sheetname] = values  # minute-wise average profile L/h
         elif sheetname[1] == "e":
             profiles["we"][int(sheetname[2])] = values  # probabilities 0 - 1
         else:
@@ -67,7 +178,7 @@ def generate_dhw_profile_like_pycity(initial_day=0, current_occupancy=5,
 
     # time series for return statement
     water = []  # in L/h
-    heat = []   # in W
+    heat = []  # in W
 
     number_days = 365
 
@@ -87,10 +198,11 @@ def generate_dhw_profile_like_pycity(initial_day=0, current_occupancy=5,
         arg = math.pi * (2 / 365 * day - 1 / 4)
         probability_season = 1 + 0.1 * np.cos(arg)
 
-        for m in range(1440):   # Iterate over all minutes in a day
+        steps = int(24 * 3600 / s_step)  # should be 1minute steps for pycity
+        for t in range(steps):  # Iterate over all time-steps in a day
 
             if current_occupancy > 0:
-                probability_profile = probability_profiles[current_occupancy][m]
+                probability_profile = probability_profiles[current_occupancy][t]
             else:
                 probability_profile = 0
 
@@ -102,19 +214,18 @@ def generate_dhw_profile_like_pycity(initial_day=0, current_occupancy=5,
             if random.random() < probability:
                 # Compute amount of tap water consumption. Start with seed?
                 # This consumption has to be positive!
-                water_m = random.gauss(average_profile[m], sigma=114.33)
+                water_m = random.gauss(average_profile[t], sigma=114.33)
                 water_daily.append(abs(water_m))
             else:
                 water_daily.append(0)
 
         c = 4180  # J/(kg.K)
         rho = 0.980  # kg/l
-        s_step = 60  # s
         heat_daily = [i * rho * c * temp_dT / s_step for i in water_daily]  # W
 
         # Include current_water and current_heat in water and heat
-        water[day * 1440:(day + 1) * 1440] = water_daily    # L/h, 1min s_step
-        heat[day * 1440:(day + 1) * 1440] = heat_daily      # W, 1min s_step
+        water[day * 1440:(day + 1) * 1440] = water_daily  # L/h, 1min s_step
+        heat[day * 1440:(day + 1) * 1440] = heat_daily  # W, 1min s_step
 
     # print total energy and average energy flow
     yearly_heat_demand = sum(heat) / 1000  # in kWh
@@ -129,7 +240,7 @@ def generate_dhw_profile_like_pycity(initial_day=0, current_occupancy=5,
     average_water_demand = (sum(water) / len(water)) / 1000  # in kW
     max_water_demand = max(water) / 1000  # in kW per step
 
-    print("Yearly cooling demand for ahouse from DemGen is {:.2f} kWh "
+    print("Yearly cooling demand for a house from DemGen is {:.2f} kWh "
           "with an average of {:.2f} kW and a peak of {:.2f} kW"
           .format(yearly_water_demand, average_water_demand, max_water_demand))
 
