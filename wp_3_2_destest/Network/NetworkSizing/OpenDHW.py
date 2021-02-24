@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import pandas as pd
-import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 import xlrd
 import math
+import statistics
 import random
 import matplotlib.dates as mdates
 
@@ -19,6 +19,8 @@ import pycity_base.classes.demand.occupancy as occ
 
 
 def main():
+
+    plot_average_profiles_pycity()
 
     x, water_pycity_alias_60 = generate_dhw_profile_pycity_alias(s_step=60)
     x, water_pycity_alias_600 = generate_dhw_profile_pycity_alias(s_step=600)
@@ -40,11 +42,13 @@ def import_from_dhwcalc(s_step=60, temp_dT=35, print_stats=True,
     DHWcalc yields Volume Flow TimeSeries (in Liters per hour). To get
     Energyflows -> Q = Vdot * rho * cp * dT
 
-    :return: dhw_demand:    time series. each timestep contains the Energyflow
-                            in Watt -> W
+    :param  s_step:     int:    resolution of output file in seconds
+    :param  temp_dT:    int:    average Temperature Difference between
+                                Freshwater and DHW
+    :return dhw_demand: list:   each timestep contains the Energyflow in [W]
     """
 
-    # timeseries are 200 L/d -> 73000 L/a
+    # timeseries are 200 L/d -> 73000 L/a (for 5 people, each 40 L/d)
     if s_step == 60:
         dhw_file = "DHWcalc_200L_1min_1cat_step_functions_DHW.txt"
     elif s_step == 600:
@@ -53,11 +57,12 @@ def import_from_dhwcalc(s_step=60, temp_dT=35, print_stats=True,
         raise Exception("Unkown Time Step for DHWcalc")
     dhw_profile = Path.cwd() / dhw_file
 
+    # Flowrates
     water_LperH = [int(word.strip('\n')) for word in
                    open(dhw_profile).readlines()]  # L/h each step
-    water_LperSec = [x / 3600 for x in water_LperH]
+    water_LperSec = [x / 3600 for x in water_LperH]  # L/s each step
 
-    rho = 980 / 1000  # 1L = 1kg for Water
+    rho = 980 / 1000  # kg/L for Water (at 60°C? at 10°C its = 1)
     cp = 4180  # J/kgK
     dhw_demand = [i * rho * cp * temp_dT for i in water_LperSec]  # in W
 
@@ -188,9 +193,23 @@ def import_from_dhwcalc(s_step=60, temp_dT=35, print_stats=True,
     return dhw_demand, water_LperH
 
 
+def generate_dhw_profile_dhwcalc_alias():
+
+    # generate probability for weekday with 6 step functions
+
+    # generate probability for weekend with 6 step functions
+
+    # generate average profile (how?)
+
+    # ab hier wie im pycity alias
+
+    return "noch nix"
+
+
 def generate_dhw_profile_pycity_alias(s_step=60, initial_day=0,
                                       current_occupancy=5, temp_dT=35,
-                                      plot_demand=True, save_fig=False):
+                                      print_stats=True, plot_demand=True,
+                                      save_fig=False):
     """
     :param: s_step: int:        seconds within a time step. Should be
                                 60s for pycity.
@@ -233,6 +252,12 @@ def generate_dhw_profile_pycity_alias(s_step=60, initial_day=0,
         else:
             profiles["wd"][int(sheetname[2])] = values  # probabilities 0 - 1
 
+    # https://en.wikipedia.org/wiki/Geometric_distribution
+    # occupancy is random, not a function of daytime! -> reasonable?
+    timesteps_year = int(365 * 24 * 3600 / s_step)
+    occupancy = np.random.geometric(p=0.8, size=timesteps_year) - 1  # [0, 2..]
+    occupancy = np.minimum(5, occupancy)
+
     # time series for return statement
     water = []  # in L/h
     heat = []  # in W
@@ -255,8 +280,13 @@ def generate_dhw_profile_pycity_alias(s_step=60, initial_day=0,
         arg = math.pi * (2 / 365 * day - 1 / 4)
         probability_season = 1 + 0.1 * np.cos(arg)
 
-        steps = int(24 * 3600 / s_step)  # should be 1minute steps for pycity
-        for t in range(steps):  # Iterate over all time-steps in a day
+        timesteps_day = int(24 * 3600 / s_step)
+        for t in range(timesteps_day):  # Iterate over all time-steps in a day
+
+            first_timestep_day = day * timesteps_day
+            last_timestep_day = (day + 1) * timesteps_day
+            daily_occupancy = occupancy[first_timestep_day:last_timestep_day]
+            current_occupancy = daily_occupancy[t]
 
             if current_occupancy > 0:
                 probability_profile = probability_profiles[current_occupancy][t]
@@ -290,9 +320,18 @@ def generate_dhw_profile_pycity_alias(s_step=60, initial_day=0,
     # compute Sums and Maxima for Water and Heat
     yearly_water_demand = round(sum(water_LperSec) * s_step, 1)  # in L
     max_water_flow = round(max(water_LperH), 1)  # in L/h
-    yearly_dhw_demand = round(sum(heat) * s_step / (3600 * 1000),
-                              1)  # kWh
+    yearly_dhw_demand = round(sum(heat) * s_step / (3600 * 1000), 1)  # kWh
     max_dhw_heat_flow = round(max(heat) / 1000, 1)  # in kW
+
+    if print_stats:
+
+        print("Yearly drinking water demand from PyCity Alias is {:.2f} L"
+              " with a maximum of {:.2f} L/h".format(yearly_water_demand,
+                                                     max_water_flow))
+
+        print("Yearly DHW energy demand from PyCity Alias is {:.2f} kWh"
+              " with a maximum of {:.2f} kW".format(yearly_dhw_demand,
+                                                    max_dhw_heat_flow))
 
     if plot_demand:
         fig, ax = plt.subplots()
@@ -300,7 +339,7 @@ def generate_dhw_profile_pycity_alias(s_step=60, initial_day=0,
         ax.plot(water_LperH, linewidth=0.7, label="Water")
         plt.ylabel('Water [L/h]')
         plt.xlabel('Timesteps in a year, length = {}s'.format(s_step))
-        plt.title('Water and Heat time-series from DHWcalc, dT = {} °C\n'
+        plt.title('Water and Heat time-series from PyCity Alias, dT = {} °C\n'
                   'Yearly Water Demand = {} L with a Peak of {} L/h \n'
                   'Yearly Heat Demand = {} kWh with a Peak of {} kW'.format(
             temp_dT, yearly_water_demand, max_water_flow, yearly_dhw_demand,
@@ -358,11 +397,11 @@ def generate_dhw_profile_pycity(s_step=60, temp_dT=35, print_stats=True,
 
     if print_stats:
 
-        print("Yearly drinking water demand from DHWcalc is {:.2f} L"
+        print("Yearly drinking water demand from PyCity is {:.2f} L"
               " with a maximum of {:.2f} L/h".format(yearly_water_demand,
                                                      max_water_flow))
 
-        print("Yearly DHW energy demand from DHWcalc is {:.2f} kWh"
+        print("Yearly DHW energy demand from PyCity is {:.2f} kWh"
               " with a maximum of {:.2f} kW".format(yearly_dhw_demand,
                                                     max_dhw_heat_flow))
 
@@ -373,7 +412,7 @@ def generate_dhw_profile_pycity(s_step=60, temp_dT=35, print_stats=True,
         ax.plot(water_LperH, linewidth=0.7, label="Water")
         plt.ylabel('Water [L/h]')
         plt.xlabel('Timesteps in a year, length = {}s'.format(s_step))
-        plt.title('Water and Heat time-series from DHWcalc, dT = {} °C\n'
+        plt.title('Water and Heat time-series from PyCity, dT = {} °C\n'
                   'Yearly Water Demand = {} L with a Peak of {} L/h \n'
                   'Yearly Heat Demand = {} kWh with a Peak of {} kW'.format(
             temp_dT, yearly_water_demand, max_water_flow, yearly_dhw_demand,
@@ -387,6 +426,48 @@ def generate_dhw_profile_pycity(s_step=60, temp_dT=35, print_stats=True,
             fig.savefig(dir_output / "Demand_PyCity.pdf")
 
     return dhw_demand, water_LperH
+
+
+def plot_average_profiles_pycity(save_fig=False):
+
+    profiles_path = Path.cwd() / 'dhw_stochastical.xlsx'
+    profiles = {"we": {}, "wd": {}}
+    book = xlrd.open_workbook(profiles_path)
+
+    # Iterate over all sheets. wd = weekday, we = weekend. mw = ist the
+    # average profile. occupancy is between 1-6 (we1 - we6).
+    for sheetname in book.sheet_names():
+        sheet = book.sheet_by_name(sheetname)
+
+        # Read values
+        values = [sheet.cell_value(i, 0) for i in range(1440)]
+
+        # Store values in dictionary
+        if sheetname in ("wd_mw", "we_mw"):
+            profiles[sheetname] = values  # minute-wise average profile L/h
+
+    average_profile_we = profiles["we_mw"]
+    average_profile_wd = profiles["wd_mw"]
+
+    av_wd_lst = [statistics.mean(average_profile_wd) for i in range(1440)]
+    av_we_lst = [statistics.mean(average_profile_we) for i in range(1440)]
+
+    fig, ax = plt.subplots()
+    ax.plot(average_profile_we, linewidth=0.7, label="Weekend")
+    ax.plot(average_profile_wd, linewidth=0.7, label="Weekday")
+    ax.plot(av_wd_lst, linewidth=0.7, label="Average Weekday")
+    ax.plot(av_we_lst, linewidth=0.7, label="Average Weekday")
+    plt.ylabel('Water [L/h]')
+    plt.xlabel('Minutes in a day')
+    plt.title('Average profiles from PyCity')
+
+    plt.legend()
+    plt.show()
+
+    if save_fig:
+        dir_output = Path.cwd() / "plots"
+        dir_output.mkdir(exist_ok=True)
+        fig.savefig(dir_output / "Average_Profiles_PyCity.pdf")
 
 
 if __name__ == '__main__':
