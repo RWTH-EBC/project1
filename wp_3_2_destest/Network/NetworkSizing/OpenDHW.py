@@ -35,7 +35,7 @@ def main():
 
 
 def import_from_dhwcalc(s_step=60, temp_dT=35, print_stats=True,
-                        plot_demand=True, plot_sliced_demand=False,
+                        plot_demand=True, plot_sliced_demand=True,
                         start_plot='2019-08-01', end_plot='2019-08-14',
                         save_fig=True):
     """
@@ -109,60 +109,30 @@ def import_from_dhwcalc(s_step=60, temp_dT=35, print_stats=True,
         rwth_blue = "#00549F"
         rwth_red = "#CC071E"
 
-        sns.set_style("ticks")
+        # sns.set_style("white")
         sns.set_context("paper")
 
         timedelta = pd.Timedelta(pd.Timestamp(end_plot) - pd.Timestamp(
             start_plot))
 
-        if timedelta.days < 3:
-            resample_delta = "600S"  # 10min
-        elif timedelta.days < 14:  # 2 Weeks
-            resample_delta = "1800S"  # 30min
-        elif timedelta.days < 62:  # 2 months
-            resample_delta = "H"  # hourly
-        else:
-            resample_delta = "D"
         resample_delta = str(s_step) + 'S'
+
         # set date range to simplify plot slicing
         date_range = pd.date_range(start='2019-01-01', end='2020-01-01',
                                    freq=str(s_step) + 'S')
         date_range = date_range[:-1]
 
-        # convert demands to kW for plotting
-        dhw_demand = [dem_step / 1000 for dem_step in dhw_demand]
-
         # make dataframe for plotting with seaborn
-        plot_df = pd.DataFrame({'DHW Demand': dhw_demand,
-                                'Water Demand': water_LperH},
+        plot_df = pd.DataFrame({'Waterflow [L/h]': water_LperH},
                                index=date_range)
 
         fig, ax1 = plt.subplots()
         fig.tight_layout()
 
-        # slice dataframes
-        data_dhw = plot_df[['DHW Demand']][start_plot:end_plot]
-        data_water = plot_df[['Water Demand']][start_plot:end_plot]
-
-        ax1 = sns.lineplot(data=data_dhw, linewidth=1.2, palette=[rwth_red])
-        ax1 = sns.lineplot(data=data_dhw.resample(resample_delta).mean(),
+        ax1 = sns.lineplot(data=plot_df[start_plot:end_plot],
                            linewidth=1.2, palette=[rwth_red])
-        ax1.grid(False)
 
-        ax2 = ax1.twinx()
-        ax2 = sns.lineplot(data=data_water.resample(resample_delta).mean(),
-                           dashes=[(6, 2), (6, 2)], linewidth=1.2,
-                           palette=[rwth_blue])
-
-        # make one legend for the figure
-        ax1.legend_.remove()
-        ax2.legend_.remove()
-        # fig.legend(loc="upper left", bbox_to_anchor=(0.12, 0.8))
-        fig.legend(loc="upper right")
-
-        ax1.set_ylabel('Heat [kW]')
-        ax2.set_ylabel('Water [L/h]')
-        ax2.grid(False)
+        plt.legend()
 
         plt.title('Water and Heat time-series from DHWcalc, dT = {} °C\n'
                   'Yearly Water Demand = {} L with a Peak of {} L/h \n'
@@ -193,17 +163,223 @@ def import_from_dhwcalc(s_step=60, temp_dT=35, print_stats=True,
     return dhw_demand, water_LperH
 
 
-def generate_dhw_profile_dhwcalc_alias():
+def generate_dhw_profile_dhwcalc_alias(initial_day=0, s_step=60, temp_dT=35,
+                                       print_stats=True, plot_demand=True,
+                                       save_fig=False, ):
 
     # generate probability for weekday with 6 step functions
 
+    step_0_wd = 6.5
+    p_0_wd = 0.01
+
+    step_1_wd = 1
+    p_1_wd = 0.5
+
+    step_2_wd = 4.5
+    p_2_wd = 0.06
+
+    step_3_wd = 1
+    p_3_wd = 0.16
+
+    step_4_wd = 5
+    p_4_wd = 0.06
+
+    step_5_wd = 4
+    p_5_wd = 0.2
+
+    step_6_wd = 2
+    p_6_wd = 0.01
+
+    steps_wd = [step_0_wd, step_1_wd, step_2_wd, step_3_wd, step_4_wd,
+                step_5_wd, step_6_wd]
+    ps_wd = [p_0_wd, p_1_wd, p_2_wd, p_3_wd, p_4_wd, p_5_wd, p_6_wd]
+
+    assert sum(steps_wd) == 24
+    assert sum(ps_wd) == 1
+
+    p_0_wd_lst = [p_0_wd for i in range(int(step_0_wd * 60))]
+    p_1_wd_lst = [p_1_wd for i in range(int(step_1_wd * 60))]
+    p_2_wd_lst = [p_2_wd for i in range(int(step_2_wd * 60))]
+    p_3_wd_lst = [p_3_wd for i in range(int(step_3_wd * 60))]
+    p_4_wd_lst = [p_4_wd for i in range(int(step_4_wd * 60))]
+    p_5_wd_lst = [p_5_wd for i in range(int(step_5_wd * 60))]
+    p_6_wd_lst = [p_6_wd for i in range(int(step_6_wd * 60))]
+
+    ps_lsts = [p_0_wd_lst, p_1_wd_lst, p_2_wd_lst, p_3_wd_lst, p_4_wd_lst,
+               p_5_wd_lst, p_6_wd_lst]
+
+    p_wd = []
+
+    for lst in ps_lsts:
+        p_wd.extend(lst)
+
     # generate probability for weekend with 6 step functions
 
-    # generate average profile (how?)
+    step_0_we = 7
+    p_0_we = 0.02
 
-    # ab hier wie im pycity alias
+    step_1_we = 2
+    p_1_we = 0.475
 
-    return "noch nix"
+    step_2_we = 6
+    p_2_we = 0.071
+
+    step_3_we = 2
+    p_3_we = 0.237
+
+    step_4_we = 3
+    p_4_we = 0.036
+
+    step_5_we = 3
+    p_5_we = 0.143
+
+    step_6_we = 1
+    p_6_we = 0.018
+
+    steps_we = [step_0_we, step_1_we, step_2_we, step_3_we, step_4_we,
+                step_5_we, step_6_we]
+    ps_we = [p_0_we, p_1_we, p_2_we, p_3_we, p_4_we, p_5_we, p_6_we]
+
+    assert sum(steps_we) == 24
+    assert sum(ps_we) == 1
+
+    p_0_we_lst = [p_0_we for i in range(int(step_0_we * 60))]
+    p_1_we_lst = [p_1_we for i in range(int(step_1_we * 60))]
+    p_2_we_lst = [p_2_we for i in range(int(step_2_we * 60))]
+    p_3_we_lst = [p_3_we for i in range(int(step_3_we * 60))]
+    p_4_we_lst = [p_4_we for i in range(int(step_4_we * 60))]
+    p_5_we_lst = [p_5_we for i in range(int(step_5_we * 60))]
+    p_6_we_lst = [p_6_we for i in range(int(step_6_we * 60))]
+
+    ps_lsts = [p_0_we_lst, p_1_we_lst, p_2_we_lst, p_3_we_lst, p_4_we_lst,
+               p_5_we_lst, p_6_we_lst]
+
+    p_we = []
+
+    for lst in ps_lsts:
+        p_we.extend(lst)
+
+    # generate average profile
+    l_day = 200
+
+    average_profile = [random.gauss(l_day, sigma=114.33) for i in range(1440)]
+    average_profile = [abs(entry) for entry in average_profile]
+
+    # ab hier wie in PyCity Alias:
+
+    # time series for return statement
+    water = []  # in L/h
+    heat = []  # in W
+
+    number_days = 365
+
+    for day in range(number_days):
+
+        # Is the current day on a weekend?
+        if (day + initial_day) % 7 >= 5:
+            p_day = p_we
+        else:
+            p_day = p_wd
+
+        water_daily = []
+
+        # Compute seasonal factor
+        arg = math.pi * (2 / 365 * day - 1 / 4)
+        probability_season = 1 + 0.1 * np.cos(arg)
+
+        timesteps_day = int(24 * 3600 / s_step)
+
+        for t in range(timesteps_day):  # Iterate over all time-steps in a day
+
+            # Compute probability for tap water demand at time t
+            probability = p_day[t] * probability_season
+
+            # Check if tap water demand occurs. The higher the probability,
+            # the more likely the if statement is true.
+            if random.random() < probability:
+                # Compute amount of tap water consumption. Start with seed?
+                # This consumption has to be positive!
+                water_t = random.gauss(average_profile[t], sigma=114.33)
+                water_daily.append(abs(water_t))
+            else:
+                water_daily.append(0)
+
+        c = 4180  # J/(kg.K)
+        rho = 0.980  # kg/l
+        heat_daily = [i * rho * c * temp_dT / s_step for i in water_daily]  # W
+
+        # Include current_water and current_heat in water and heat
+        water.extend(water_daily)
+        heat.extend(heat_daily)
+
+    water_LperH = water
+    water_LperSec = [x / 3600 for x in water_LperH]
+
+    # compute Sums and Maxima for Water and Heat
+    yearly_water_demand = round(sum(water_LperSec) * s_step, 1)  # in L
+    max_water_flow = round(max(water_LperH), 1)  # in L/h
+    yearly_dhw_demand = round(sum(heat) * s_step / (3600 * 1000), 1)  # kWh
+    max_dhw_heat_flow = round(max(heat) / 1000, 1)  # in kW
+    av_water_flow = statistics.mean(water_LperH)
+
+    av_water_flow_lst = [av_water_flow for i in range(365 * 24 * s_step)]
+
+    if print_stats:
+
+        print("Yearly drinking water demand from PyCity Alias is {:.2f} L"
+              " with a maximum of {:.2f} L/h".format(yearly_water_demand,
+                                                     max_water_flow))
+
+        print("Yearly DHW energy demand from PyCity Alias is {:.2f} kWh"
+              " with a maximum of {:.2f} kW".format(yearly_dhw_demand,
+                                                    max_dhw_heat_flow))
+
+    if plot_demand:
+        fig, ax = plt.subplots()
+        ax.plot(water_LperH, linewidth=0.7, label="Water")
+        ax.plot(av_water_flow_lst, linewidth=1, label="Average")
+        plt.ylabel('Water [L/h]')
+        plt.xlabel('Timesteps in a year, length = {}s'.format(s_step))
+        plt.title('Water and Heat time-series from PyCity Alias, dT = {} °C\n'
+                  'Yearly Water Demand = {} L with a Peak of {} L/h \n'
+                  'Yearly Heat Demand = {} kWh with a Peak of {} kW'.format(
+            temp_dT, yearly_water_demand, max_water_flow, yearly_dhw_demand,
+            max_dhw_heat_flow))
+
+        plt.legend(loc="upper left")
+        plt.show()
+
+        if save_fig:
+            dir_output = Path.cwd() / "plots"
+            dir_output.mkdir(exist_ok=True)
+            fig.savefig(dir_output / "Demand_DHWcalc_Alias.pdf")
+
+    plot_demand_sliced = True
+    if plot_demand_sliced:
+        fig, ax = plt.subplots()
+
+        end = int(2 * 24 * 3600 / s_step)
+
+        ax.plot(water_LperH[0:end], linewidth=0.7, label="Water")
+        ax.plot(av_water_flow_lst[0:end], linewidth=0.7, label="Average")
+        plt.ylabel('Water [L/h]')
+        plt.xlabel('Timesteps in a year, length = {}s'.format(s_step))
+        plt.title('Water and Heat time-series from PyCity Alias, dT = {} °C\n'
+                  'Yearly Water Demand = {} L with a Peak of {} L/h \n'
+                  'Yearly Heat Demand = {} kWh with a Peak of {} kW'.format(
+            temp_dT, yearly_water_demand, max_water_flow, yearly_dhw_demand,
+            max_dhw_heat_flow))
+
+        plt.legend(loc="upper left")
+        plt.show()
+
+        if save_fig:
+            dir_output = Path.cwd() / "plots"
+            dir_output.mkdir(exist_ok=True)
+            fig.savefig(dir_output / "Demand_DHWcalc_Alias.pdf")
+
+
+    return heat, water_LperH
 
 
 def generate_dhw_profile_pycity_alias(s_step=60, initial_day=0,
@@ -434,8 +610,11 @@ def plot_average_profiles_pycity(save_fig=False):
     profiles = {"we": {}, "wd": {}}
     book = xlrd.open_workbook(profiles_path)
 
+    s_step = 600
+
     # Iterate over all sheets. wd = weekday, we = weekend. mw = ist the
-    # average profile. occupancy is between 1-6 (we1 - we6).
+    # average profile in [L/h] in 10min steps. occupancy is between 1-6 (we1 -
+    # we6).
     for sheetname in book.sheet_names():
         sheet = book.sheet_by_name(sheetname)
 
@@ -446,22 +625,30 @@ def plot_average_profiles_pycity(save_fig=False):
         if sheetname in ("wd_mw", "we_mw"):
             profiles[sheetname] = values  # minute-wise average profile L/h
 
-    average_profile_we = profiles["we_mw"]
-    average_profile_wd = profiles["wd_mw"]
+    water_LperH_we = profiles["we_mw"]
+    water_LperH_wd = profiles["wd_mw"]
 
-    av_wd_lst = [statistics.mean(average_profile_wd) for i in range(1440)]
-    av_we_lst = [statistics.mean(average_profile_we) for i in range(1440)]
+    water_L_we = [i * s_step / 3600 for i in water_LperH_we]
+    water_L_wd = [i * s_step / 3600 for i in water_LperH_wd]
+
+    daily_water_we = round(sum(water_L_we), 1)
+    daily_water_wd = round(sum(water_L_wd), 1)
+
+    av_wd_lst = [statistics.mean(water_LperH_we) for i in range(1440)]
+    av_we_lst = [statistics.mean(water_LperH_wd) for i in range(1440)]
 
     fig, ax = plt.subplots()
-    ax.plot(average_profile_we, linewidth=0.7, label="Weekend")
-    ax.plot(average_profile_wd, linewidth=0.7, label="Weekday")
+    ax.plot(water_LperH_we, linewidth=0.7, label="Weekend")
+    ax.plot(water_LperH_wd, linewidth=0.7, label="Weekday")
     ax.plot(av_wd_lst, linewidth=0.7, label="Average Weekday")
     ax.plot(av_we_lst, linewidth=0.7, label="Average Weekday")
     plt.ylabel('Water [L/h]')
     plt.xlabel('Minutes in a day')
-    plt.title('Average profiles from PyCity')
+    plt.title('Average profiles from PyCity. \n'
+              'Daily Sum Weekday: {} L, Daily Sum Weekend: {} L'.format(
+        daily_water_wd, daily_water_we))
 
-    plt.legend()
+    plt.legend(loc='upper left')
     plt.show()
 
     if save_fig:
