@@ -77,36 +77,141 @@ def import_from_dhwcalc(s_step=60, temp_dT=35, print_stats=True,
     return dhw_demand, water_LperH
 
 
+def shift_weekend_weekday(p_weekday, p_weekend, factor):
+    """
+    Shifts the probabilities between the weekday list and the weekend list by a
+    defined factor. If the factor is bigger than 1, the probability on the
+    weekend is increased. If its smaller than 1, the probability on the
+    weekend is decreased.
+
+    :param p_weekday:   list:   probabilites for 1 day of the week [0...1]
+    :param p_weekend:   list:   probabilitiers for 1 day of the weekend [0...1]
+    :param factor:      float:  factor to shift the probabiliters between
+                                weekdays and weekenddays
+    :return:
+    """
+
+    av_p_wd = statistics.mean(p_weekday)
+    av_p_we = statistics.mean(p_weekend)
+
+    av_p_week = av_p_wd * 5 / 7 + av_p_we * 2 / 7
+
+    p_wd_factor = 1 / (5 / 7 + factor * 2 / 7)
+    p_we_factor = 1 / (1 / factor * 5 / 7 + 2 / 7)
+
+    assert p_wd_factor * 5 / 7 + p_we_factor * 2 / 7 == 1
+
+    p_wd_weighted = [p * p_we_factor for p in p_weekday]
+    p_we_weighted = [p * p_we_factor for p in p_weekend]
+
+    av_p_wd_weighted = statistics.mean(p_wd_weighted)
+    av_p_we_weighted = statistics.mean(p_we_weighted)
+
+    av_p_week_weighted = av_p_wd_weighted * 5 / 7 + av_p_we_weighted * 2 / 7
+
+    return p_wd_weighted, p_we_weighted, av_p_week_weighted
+
+
+def generate_average_daily_profile(mode, l_day, sigma_day, av_p_day,
+                                   s_step, plot_profile=False):
+    """
+    Generates an average profile for daily water drawoffs. The total amount
+    of water in the average profile has to be higher than the demanded water
+    per day, as the average profile is multiplied by the average probability
+    each day. two modes are given to generate the average profile.
+
+    :param mode:            string: type of probability distribution
+    :param l_day:           float:  mean value of resulting profile
+    :param sigma_day:       float:  standard deviation of resulting profile
+    :param av_p_day:        float:  average probability of
+    :param s_step:          int:    seconds within a time step
+    :param plot_profile:    bool:   decide to plot the profile
+
+    :return: average_profile:   list:   average water drawoff profile in L/h
+                                        per timestep
+    """
+
+    timesteps_day = int(24 * 3600 / s_step)
+
+    l_av_profile = l_day / av_p_day
+    sigma_av_profile = sigma_day / av_p_day
+
+    LperH_step_av_profile = l_av_profile / 24
+    sigma_step_av_profile = sigma_av_profile / 24
+
+    if mode == 'gauss':
+
+        # problem: generates negative values. If we take the absolute of the
+        # gauss distribution, the mean and standard deviation changes,
+        # and more than 200 L/d are being consumed.
+
+        average_profile = [random.gauss(LperH_step_av_profile,
+                                        sigma=sigma_step_av_profile) for i in
+                           range(timesteps_day)]
+
+        average_profile = [abs(entry) for entry in average_profile]
+
+    elif mode == 'lognormal':
+
+        # problem: understand the settings of the lognormal function.
+        # https://en.wikipedia.org/wiki/Log-normal_distribution
+
+        m = LperH_step_av_profile
+        sigma = sigma_step_av_profile / 40
+
+        v = sigma ** 2
+        norm_mu = np.log(m ** 2 / np.sqrt(v + m ** 2))
+        norm_sigma = np.sqrt((v / m ** 2) + 1)
+
+        average_profile = np.random.lognormal(norm_mu, norm_sigma,
+                                              timesteps_day)
+
+    else:
+        raise Exception("Unkown Mode for average daily water profile "
+                        "geneartion")
+
+    if plot_profile:
+        mean = [statistics.mean(average_profile) for i in average_profile]
+        plt.plot(average_profile)
+        plt.plot(mean)
+        plt.show()
+
+    return average_profile
+
+
 def generate_dhw_profile_dhwcalc_alias(initial_day=0, s_step=60, temp_dT=35,
                                        print_stats=True, plot_demand=True,
                                        start_plot='2019-08-01',
                                        end_plot='2019-08-03', save_fig=False):
 
-    l_day = 200
+    timesteps_day = int(24 * 3600 / s_step)
 
-    average_profile = [random.gauss(l_day, sigma=114.33) for i in range(1440)]
-    average_profile = [abs(entry) for entry in average_profile]
+    p_we = generate_daily_probability_step_function(
+        mode='weekend',
+        s_step=s_step
+    )
 
-    p_we = generate_daily_probability_step_function(mode='weekend',
-                                                    s_step=s_step)
-    p_wd = generate_daily_probability_step_function(mode='weekday',
-                                                    s_step=s_step)
+    p_wd = generate_daily_probability_step_function(
+        mode='weekday',
+        s_step=s_step
+    )
 
-    # Probability Shift between weeday and weekend
-    p_wd_to_we = 1.2
+    p_wd_weighted, p_we_weighted, av_p_week_weighted = shift_weekend_weekday(
+        p_weekday=p_wd,
+        p_weekend=p_we,
+        factor=1.2
+    )
 
-    p_wd_factor = 1 / (5 / 7 + p_wd_to_we * 2 / 7)
-    p_we_factor = 1 / (1 / p_wd_to_we * 5 / 7 + 2 / 7)
-
-    assert p_we_factor / p_wd_factor == p_wd_to_we
-
-    p_we = [p * p_we_factor for p in p_we]
-    p_wd = [p * p_we_factor for p in p_wd]
-
-    # from here like PyCity Alias
+    average_profile = generate_average_daily_profile(
+        mode='gauss',
+        l_day=200,
+        sigma_day=70,
+        av_p_day=av_p_week_weighted,
+        s_step=s_step,
+    )
 
     # time series for return statement
-    water = []  # in L/h
+    water_LperH = []  # in L/h
 
     number_days = 365
 
@@ -114,17 +219,15 @@ def generate_dhw_profile_dhwcalc_alias(initial_day=0, s_step=60, temp_dT=35,
 
         # Is the current day on a weekend?
         if (day + initial_day) % 7 >= 5:
-            p_day = p_we
+            p_day = p_we_weighted
         else:
-            p_day = p_wd
+            p_day = p_wd_weighted
 
         water_daily = []
 
         # Compute seasonal factor
         arg = math.pi * (2 / 365 * day - 1 / 4)
         probability_season = 1 + 0.1 * np.cos(arg)
-
-        timesteps_day = int(24 * 3600 / s_step)
 
         for t in range(timesteps_day):  # Iterate over all time-steps in a day
 
@@ -136,15 +239,16 @@ def generate_dhw_profile_dhwcalc_alias(initial_day=0, s_step=60, temp_dT=35,
             if random.random() < probability:
                 # Compute amount of tap water consumption. Start with seed?
                 # This consumption has to be positive!
+                # Problem: when the absolute is taken, the mean and sigma of
+                # the gauss distribution is changed, and the total daily
+                # draw-off volume changes!
                 water_t = random.gauss(average_profile[t], sigma=114.33)
                 water_daily.append(abs(water_t))
             else:
                 water_daily.append(0)
 
         # Include current_water and current_heat in water and heat
-        water.extend(water_daily)
-
-    water_LperH = water
+        water_LperH.extend(water_daily)
 
     # Plot
     dhw_demand = compute_stats_and_plot_demand(
@@ -162,10 +266,18 @@ def generate_dhw_profile_dhwcalc_alias(initial_day=0, s_step=60, temp_dT=35,
     return dhw_demand, water_LperH
 
 
-def generate_daily_probability_step_function(mode, s_step):
+def generate_daily_probability_step_function(mode, s_step, plot_p_day=False):
+    """
+    Generates probabilites for a day with 6 periods. Corresponds to the mode
+    "step function for weekdays and weekends" in DHWcalc and uses the same
+    standard values. Each Day starts at 0:00. Steps in hours. Sum of steps
+    has to be 24. Sum of probabilites has to be 1.
 
-    # probability for day with 6 periods. Each Day starts at 0:00. Steps in
-    # hours. Sum of steps has to be 24. Sum of probabilites has to be 1.
+    :param mode:        string: decide to compute for a weekday of a weekend day
+    :param s_step:      int:    seconds within a timestep
+    :param plot_p_day:  Bool:   decide to plot the probability distribution
+    :return: p_day      list:   the probability distribution for one day.
+    """
 
     if mode == 'weekday':
         step_0 = 6.5
@@ -214,11 +326,11 @@ def generate_daily_probability_step_function(mode, s_step):
     else:
         raise Exception('Unkown Mode. Please Choose "Weekday" or "Weekend".')
 
-    steps_wd = [step_0, step_1, step_2, step_3, step_4, step_5, step_6]
-    ps_wd = [p_0, p_1, p_2, p_3, p_4, p_5, p_6]
+    steps = [step_0, step_1, step_2, step_3, step_4, step_5, step_6]
+    ps = [p_0, p_1, p_2, p_3, p_4, p_5, p_6]
 
-    assert sum(steps_wd) == 24
-    assert sum(ps_wd) == 1
+    assert sum(steps) == 24
+    assert sum(ps) == 1
 
     p_0_lst = [p_0 for i in range(int(step_0 * 3600 / s_step))]
     p_1_lst = [p_1 for i in range(int(step_1 * 3600 / s_step))]
@@ -239,6 +351,10 @@ def generate_daily_probability_step_function(mode, s_step):
     # check if length of daily intervals fits into the stepwidth. if s_step
     # f.e is 3600s (1h), one daily intervall cant be 4.5 hours.
     assert len(p_day) == 24 * 3600 / s_step
+
+    if plot_p_day:
+        plt.plot(p_day)
+        plt.show()
 
     return p_day
 
@@ -500,7 +616,8 @@ def compute_stats_and_plot_demand(method, s_step, water_LperH,
 
     # compute Sums and Maxima for Water and Heat
     yearly_water_demand = round(sum(water_LperSec) * s_step, 1)  # in L
-    av_daily_water = [yearly_water_demand / 365 for i in water_LperH]  # L/day
+    av_daily_water = round(yearly_water_demand / 365, 1)
+    av_daily_water_lst = [av_daily_water for i in water_LperH]  # L/day
     max_water_flow = round(max(water_LperH), 1)  # in L/h
     yearly_dhw_demand = round(sum(dhw) * s_step / (3600 * 1000),  1)  # kWh
     max_dhw_heat_flow = round(max(dhw) / 1000, 1)  # in kW
@@ -530,7 +647,8 @@ def compute_stats_and_plot_demand(method, s_step, water_LperH,
 
         # make dataframe for plotting with seaborn
         plot_df = pd.DataFrame({'Waterflow [L/h]': water_LperH,
-                                'Yearly av. Demand [L/day]': av_daily_water},
+                                'Yearly av. Demand [{} L/day]'.format(
+                                    av_daily_water): av_daily_water_lst},
                                index=date_range)
 
         fig, ax1 = plt.subplots()
@@ -539,7 +657,7 @@ def compute_stats_and_plot_demand(method, s_step, water_LperH,
         ax1 = sns.lineplot(data=plot_df[start_plot:end_plot],
                            linewidth=1.0, palette=[rwth_blue, rwth_red])
 
-        plt.legend()
+        plt.legend(loc="upper left")
 
         plt.title('Water and Heat time-series from {}, dT = {} °C, '
                   'timestep = {} s\n'
