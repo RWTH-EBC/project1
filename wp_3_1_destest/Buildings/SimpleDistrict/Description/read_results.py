@@ -50,16 +50,16 @@ def results_to_csv(res_path, name):
         },
     )
     export = pd.DataFrame(
-        index=range(0, 31536900, 900),
+        index=range(0, 31536600, 600),
         columns=["Qheating_building_W", "Tair_dayzone_K", "Tair_nightzone_K"],
     )
     export.index.name = "Datetime"
     export["Qheating_building_W"] = results["AixLib_Heating_Power_W"][
-        36385 - 35041 : 36385
+        54577 - 52561: 54577
     ].values
-    export["Tair_dayzone_K"] = results["AixLib_T_dayzone"][36385 - 35041 : 36385].values
+    export["Tair_dayzone_K"] = results["AixLib_T_dayzone"][54577 - 52561: 54577].values
     export["Tair_nightzone_K"] = results["AixLib_T_nightzone"][
-        36385 - 35041 : 36385
+        54577 - 52561: 54577
     ].values
     # import ipdb
     #
@@ -78,7 +78,7 @@ def results_to_csv(res_path, name):
 
     export.to_csv(res_csv)
 
-    print(export.sum() / 4)
+    print(export.sum() / 6)
     print(export.max())
 
     return results
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     #         results_to_csv(os.path.join(workspace, f), name=f.replace(".mat", ""))
 
     RESULTS = [
-        os.path.join("D:\\", "workspace", "results", "Simple_District_Destest_AixLib"),
+        # os.path.join("D:\\", "workspace", "results", "Simple_District_Destest_AixLib"),
         os.path.join(
             "D:\\", "workspace", "results", "Simple_District_Occ_Destest_AixLib"
         ),

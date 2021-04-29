@@ -2,7 +2,7 @@
 # @Author: MichaMans
 # @Date:   2018-09-20 11:05:56
 # @Last Modified by:   MichaMans
-# @Last Modified time: 2019-03-21 18:38:09
+# @Last Modified time: 2021-03-10 13:02:26
 
 """This module contains an example how to generate archetype buildings using
 TEASER API functions. THis script currently only works with TEASER branch
@@ -382,7 +382,7 @@ if __name__ == "__main__":
     # run calc_all_buildings() function
 
     prj.modelica_info.current_solver = "cvode"
-    prj.modelica_info.interval_output = 900
+    prj.modelica_info.interval_output = 600
     prj.modelica_info.start_time = 30326400
     prj.modelica_info.stop_time = 63072000
 
